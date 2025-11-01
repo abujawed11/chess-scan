@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(where:*)",
+      "Bash(nul)",
+      "Bash(powershell -Command \"Expand-Archive -Path stockfish.zip -DestinationPath . -Force\")",
+      "Bash(./stockfish/stockfish-windows-x86-64-avx2.exe bench:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(uvicorn:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(venvScriptspython.exe -m pip install tensorflow keras board-to-fen)",
+      "Bash(./venv/Scripts/python.exe -m pip install:*)",
+      "Bash(./venv/Scripts/python.exe -m pip:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(.venvScriptspython.exe -m uvicorn app.main:app --reload --port 3000)",
+      "Bash(timeout /t 3)",
+      "Bash(npm run dev:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

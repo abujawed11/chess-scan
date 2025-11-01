@@ -1,0 +1,12 @@
+# FastAPI Backend for Chess Scan App
+fastapi==0.115.12
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+python-chess==1.999
+pillow==11.1.0
+opencv-python==4.10.0.84
+numpy==2.2.3
+pydantic==2.10.6
+board-to-fen==0.1.1
+tensorflow==2.20.0
+tf-keras==2.20.1

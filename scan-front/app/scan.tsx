@@ -1,16 +1,23 @@
 // app/scan.tsx
 import { useIsFocused } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { View, Text, Image, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRef, useState, useEffect } from 'react';
+import { router } from 'expo-router';
+import ImageCropper from '@/components/camera/ImageCropper';
+import { recognizeChessBoard } from '@/services/visionApi';
+import Button from '@/components/ui/Button';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
+
+type ScanStep = 'camera' | 'crop' | 'processing';
 
 export default function Scan() {
-  const isFocused = useIsFocused();               // <— key line
+  const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const camRef = useRef<CameraView | null>(null);
+  const [step, setStep] = useState<ScanStep>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [taking, setTaking] = useState(false);
-  const [fen, setFen] = useState('');
 
   useEffect(() => {
     if (!permission) requestPermission();
@@ -18,11 +25,9 @@ export default function Scan() {
 
   if (!permission?.granted) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <Text className="mb-4">Camera access is required.</Text>
-        <Pressable onPress={() => requestPermission()} className="px-4 py-2 bg-black rounded-xl">
-          <Text className="text-white">Grant Permission</Text>
-        </Pressable>
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>Camera access is required.</Text>
+        <Button title="Grant Permission" onPress={() => requestPermission()} />
       </View>
     );
   }
@@ -32,52 +37,107 @@ export default function Scan() {
     try {
       setTaking(true);
       const picture = await camRef.current.takePictureAsync({ quality: 0.85 });
-      setPhotoUri(picture?.uri ?? null);
+      if (picture?.uri) {
+        setPhotoUri(picture.uri);
+        setStep('crop');
+      }
+    } catch (error) {
+      console.error('Photo capture error:', error);
     } finally {
       setTaking(false);
     }
   };
 
-  return (
-    <View className="flex-1 bg-white">
-      {!photoUri ? (
-        <View className="flex-1">
-          {/* Ensure it’s active and has height */}
-          <CameraView
-            ref={camRef}
-            className="flex-1"
-            facing="back"
-            active={isFocused}            // <— this starts the live preview
-          />
+  const handleCropComplete = async (croppedUri: string) => {
+    setStep('processing');
+    try {
+      // Recognize chess position from cropped image
+      const result = await recognizeChessBoard(croppedUri);
 
-          {/* Bottom capture bar overlays on top of preview */}
-          <View className="p-4 bg-white">
-            <Pressable onPress={takePhoto} className="px-5 py-3 rounded-2xl bg-black items-center">
-              {taking ? <ActivityIndicator /> : <Text className="text-white">Capture Board</Text>}
-            </Pressable>
-          </View>
-        </View>
-      ) : (
-        <View className="flex-1 p-4">
-          <Image source={{ uri: photoUri }} className="w-full h-72 rounded-2xl mb-4" />
-          <Text className="mb-2 font-medium">(Prototype) Paste/Edit FEN:</Text>
-          <TextInput
-            placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-            value={fen}
-            onChangeText={setFen}
-            className="border border-neutral-300 rounded-xl p-3"
-            multiline
+      // Navigate to board editor with recognized FEN
+      router.push({
+        pathname: '/board-editor',
+        params: { fen: result.fen, imageUri: croppedUri },
+      });
+    } catch (error) {
+      console.error('Recognition error:', error);
+      // Even if recognition fails, go to board editor with default position
+      router.push({
+        pathname: '/board-editor',
+        params: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', imageUri: croppedUri },
+      });
+    }
+  };
+
+  const handleCropCancel = () => {
+    setPhotoUri(null);
+    setStep('camera');
+  };
+
+  if (step === 'processing') {
+    return <LoadingSpinner message="Analyzing chess position..." />;
+  }
+
+  if (step === 'crop' && photoUri) {
+    return (
+      <ImageCropper
+        imageUri={photoUri}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+      />
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.cameraContainer}>
+        <CameraView
+          ref={camRef}
+          style={styles.camera}
+          facing="back"
+          active={isFocused}
+        />
+
+        <View style={styles.controls}>
+          <Button
+            title="Capture Board"
+            onPress={takePhoto}
+            loading={taking}
+            size="lg"
           />
-          <View className="flex-row gap-3 mt-3">
-            <Pressable onPress={() => setPhotoUri(null)} className="px-4 py-3 bg-neutral-200 rounded-2xl">
-              <Text>Retake</Text>
-            </Pressable>
-            <Pressable onPress={() => { /* navigate to analyze as before */ }} className="px-4 py-3 bg-black rounded-2xl">
-              <Text className="text-white">Analyze Best Move</Text>
-            </Pressable>
-          </View>
         </View>
-      )}
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  permissionText: {
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  cameraContainer: {
+    flex: 1,
+  },
+  camera: {
+    flex: 1,
+  },
+  controls: {
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+  },
+});
