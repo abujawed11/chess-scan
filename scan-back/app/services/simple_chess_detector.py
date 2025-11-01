@@ -448,6 +448,37 @@ def detect_board_orientation(squares):
         return None
 
 
+
+
+
+def _infer_castling_rights_from_board(board_chars):
+    """
+    board_chars: list of 64 pieces in row-major order a8..h1.
+    Returns correct castling rights like 'KQkq' or '-' based on pieces on start squares.
+    """
+    def at(file_idx, rank_idx):  # file 0=a..7=h, rank 0=8th..7=1st
+        return board_chars[rank_idx*8 + file_idx]
+
+    rights = []
+    # White side
+    wk = at(4, 7) == 'K'  # e1
+    wra = at(0, 7) == 'R'  # a1
+    wrh = at(7, 7) == 'R'  # h1
+    if wk and wrh: rights.append('K')
+    if wk and wra: rights.append('Q')
+    # Black side
+    bk = at(4, 0) == 'k'  # e8
+    bra = at(0, 0) == 'r'
+    brh = at(7, 0) == 'r'
+    if bk and brh: rights.append('k')
+    if bk and bra: rights.append('q')
+    return ''.join(rights) if rights else '-'
+
+
+
+
+
+
 def squares_to_fen(squares, rotation=None):
     """
     Convert 64 classified squares to FEN notation.
@@ -552,7 +583,10 @@ def squares_to_fen(squares, rotation=None):
     fen = '/'.join(fen_rows)
 
     # Add default turn and castling info
-    fen += ' w KQkq - 0 1'
+    castling = _infer_castling_rights_from_board(board)
+    fen += f' w {castling} - 0 1'
+
+    validate_fen(fen)  # <-- add this for debugging
 
     print(f"✅ Generated FEN: {fen}")
     return fen
@@ -596,3 +630,16 @@ def detect_chess_position_simple(image: Image.Image, rotation=None):
         import traceback
         traceback.print_exc()
         return None
+
+
+# simple_chess_detector.py  (bottom of file)
+
+import chess
+
+def validate_fen(fen: str):
+    """Quick helper to verify if a FEN string is legal and loadable by python-chess."""
+    try:
+        board = chess.Board(fen)
+        print("✅ Valid FEN")
+    except Exception as e:
+        print(f"❌ Invalid FEN: {e}")

@@ -1,25 +1,33 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict
 
 class VisionResponse(BaseModel):
     fen: str
     confidence: float
-    detectedPieces: Optional[List[dict]] = None
+    # default to [] so clients don't get `null`
+    detectedPieces: List[Dict] = []
 
 class SquareData(BaseModel):
-    position: str  # e.g., "a8", "b7"
-    index: int  # 0-63
-    imageData: str  # base64 encoded image
+    position: str           # e.g., "a8"
+    index: int              # 0..63
+    imageData: str          # base64 tile PNG
     isEmpty: bool
-    detectedColor: Optional[str] = None  # 'w' or 'b' if piece detected
+    detectedColor: Optional[str] = None  # 'w' | 'b' | None
 
 class ExtractSquaresResponse(BaseModel):
     squares: List[SquareData]
     boardDetected: bool
-    message: str
+    # make message optional (success may not need a message)
+    message: Optional[str] = None
+
+    # NEW: all optional → backward compatible
+    boardImageData: Optional[str] = None   # base64 PNG of warped, trimmed board
+    warpedWidth: Optional[int] = None
+    warpedHeight: Optional[int] = None
+    corners: Optional[List[Tuple[float, float]]] = None  # original 4 source points
 
 class ManualFENRequest(BaseModel):
-    pieces: List[dict]  # [{"position": "a8", "piece": "r"}, ...]
+    pieces: List[Dict]  # [{"position": "a8", "piece": "r"}, ...]
 
 class EngineRequest(BaseModel):
     fen: str
@@ -31,3 +39,4 @@ class EngineResponse(BaseModel):
     evaluation: float
     depth: int
     pv: Optional[List[str]] = None
+
