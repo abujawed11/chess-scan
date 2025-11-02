@@ -29,6 +29,9 @@ export default function GamePlay({ initialFen, onBack }) {
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState(null);
 
+  // Analysis control state
+  const [analysisEnabled, setAnalysisEnabled] = useState(false);
+
   // const stockfishWorker = useRef(null);
 
   // Engine wrapper
@@ -194,10 +197,14 @@ export default function GamePlay({ initialFen, onBack }) {
 
   const requestAnalysis = useCallback(() => {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine) {
+      console.log('❌ Engine not available');
+      return;
+    }
 
     if (!engineReadyRef.current) {
       // wait for ready, then retry once
+      console.log('⏳ Engine not ready, waiting...');
       engine.waitReady().then(() => {
         engineReadyRef.current = true;
         requestAnalysis();
@@ -205,6 +212,7 @@ export default function GamePlay({ initialFen, onBack }) {
       return;
     }
 
+    console.log('🎯 Starting analysis for position:', game.fen());
     setThinking(true);
     engine.stop();
     engine.ucinewgame();
@@ -213,9 +221,34 @@ export default function GamePlay({ initialFen, onBack }) {
     engine.goDepth(18);                    // or engine.goMovetime(1000)
   }, [game]);
 
-  // Make computer move
+  // Stop analysis
+  const stopAnalysis = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    console.log('⏹️ Stopping analysis...');
+    engine.stop();
+    setThinking(false);
+    setAnalysisEnabled(false);
+    setBestMove(null);
+  }, []);
+
+  // Auto-trigger analysis when analysisEnabled becomes true
+  useEffect(() => {
+    if (analysisEnabled && !thinking) {
+      console.log('🔄 Analysis enabled, triggering analysis...');
+      requestAnalysis();
+    }
+  }, [analysisEnabled, thinking, requestAnalysis]);
+
+  // Make computer move (for computer vs modes, always enable analysis)
   const makeComputerMove = useCallback(() => {
     if (!bestMove || gameOver) return;
+
+    // Auto-enable analysis for computer modes
+    if ((gameMode === 'hvc' || gameMode === 'cvc') && !analysisEnabled) {
+      setAnalysisEnabled(true);
+    }
 
     const from = bestMove.substring(0, 2);
     const to = bestMove.substring(2, 4);
@@ -228,13 +261,15 @@ export default function GamePlay({ initialFen, onBack }) {
         setMoveHistory(prev => [...prev, move]);
         checkGameStatus();
 
-        // Request new analysis
-        setTimeout(() => requestAnalysis(), 100);
+        // Request new analysis (only if analysis is enabled)
+        if (analysisEnabled) {
+          setTimeout(() => requestAnalysis(), 100);
+        }
       }
     } catch (e) {
       console.error('Invalid computer move:', e);
     }
-  }, [bestMove, game, gameOver, requestAnalysis]);
+  }, [bestMove, game, gameOver, gameMode, analysisEnabled, requestAnalysis]);
 
   // Computer vs Computer auto-play
   useEffect(() => {
@@ -327,8 +362,10 @@ export default function GamePlay({ initialFen, onBack }) {
           setLegalMoves([]);
           checkGameStatus();
 
-          // Request analysis after move
-          setTimeout(() => requestAnalysis(), 100);
+          // Request analysis after move (only if analysis is enabled)
+          if (analysisEnabled) {
+            setTimeout(() => requestAnalysis(), 100);
+          }
         }
       } catch (e) {
         console.error('Invalid move:', e);
@@ -350,7 +387,8 @@ export default function GamePlay({ initialFen, onBack }) {
   const startGame = (mode, color = 'white') => {
     setGameMode(mode);
     setPlayerColor(color);
-    requestAnalysis();
+    // Don't auto-start analysis, let user click the button
+    // requestAnalysis();
   };
 
   // Reset game
@@ -378,7 +416,8 @@ export default function GamePlay({ initialFen, onBack }) {
     setLegalMoves([]);
     setGameOver(false);
     setResult(null);
-    requestAnalysis();
+    // Don't auto-start analysis on undo
+    // requestAnalysis();
   };
 
   // Get hint
@@ -554,6 +593,37 @@ export default function GamePlay({ initialFen, onBack }) {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
+            {/* Start/Stop Analysis Button */}
+            {!analysisEnabled ? (
+              <GameButton
+                onClick={() => {
+                  console.log('🟢 Start Analysis button clicked');
+                  setAnalysisEnabled(true);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#fff',
+                  fontWeight: 600
+                }}
+              >
+                ▶️ Start Analysis
+              </GameButton>
+            ) : (
+              <GameButton
+                onClick={() => {
+                  console.log('🔴 Stop Analysis button clicked');
+                  stopAnalysis();
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  color: '#fff',
+                  fontWeight: 600
+                }}
+              >
+                ⏹️ Stop Analysis {thinking && '(Analyzing...)'}
+              </GameButton>
+            )}
+
             <GameButton onClick={undoMove} disabled={moveHistory.length === 0}>
               ↶ Undo
             </GameButton>
