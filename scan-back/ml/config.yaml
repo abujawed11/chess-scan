@@ -1,0 +1,82 @@
+# Chess Piece Detection - Training Configuration
+
+# Dataset
+dataset:
+  root_dir: "./dataset"
+  train_split: 0.8
+  val_split: 0.2
+  num_workers: 4
+  shuffle: true
+
+# Image preprocessing
+image:
+  size: 128  # Input size (128x128)
+  normalize:
+    mean: [0.485, 0.456, 0.406]  # ImageNet stats
+    std: [0.229, 0.224, 0.225]
+
+# Data augmentation
+augmentation:
+  rotation_limit: 15
+  brightness_limit: 0.2
+  contrast_limit: 0.2
+  blur_limit: 5
+  p_flip: 0.3
+  p_clahe: 0.5
+  p_blur: 0.3
+
+# Model
+model:
+  name: "mobilenet_v3_small"  # or "resnet18", "efficientnet_b0"
+  pretrained: true
+  num_classes: 13
+  dropout: 0.3
+
+# Training
+training:
+  epochs: 20
+  batch_size: 32
+  learning_rate: 0.0001
+  weight_decay: 0.0001
+  early_stopping_patience: 5
+  save_best_only: true
+
+# Optimizer
+optimizer:
+  name: "adam"  # or "adamw", "sgd"
+  betas: [0.9, 0.999]
+
+# Learning rate scheduler
+scheduler:
+  use_scheduler: true
+  name: "cosine"  # or "step", "reduce_on_plateau"
+  warmup_epochs: 2
+  min_lr: 0.000001
+
+# Output
+output:
+  model_dir: "./models"
+  checkpoint_dir: "./checkpoints"
+  log_dir: "./logs"
+  save_frequency: 1  # Save checkpoint every N epochs
+
+# Classes
+classes:
+  - "empty"
+  - "white_pawn"
+  - "white_knight"
+  - "white_bishop"
+  - "white_rook"
+  - "white_queen"
+  - "white_king"
+  - "black_pawn"
+  - "black_knight"
+  - "black_bishop"
+  - "black_rook"
+  - "black_queen"
+  - "black_king"
+
+# Inference
+inference:
+  confidence_threshold: 0.7
+  device: "cpu"  # or "cuda"
