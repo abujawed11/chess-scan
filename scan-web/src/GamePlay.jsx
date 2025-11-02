@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Chess } from "chess.js/dist/esm/chess.js";
+import { StockfishClient } from "./engine/stockfishClient";
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = [8, 7, 6, 5, 4, 3, 2, 1];
@@ -28,57 +29,188 @@ export default function GamePlay({ initialFen, onBack }) {
   const [gameOver, setGameOver] = useState(false);
   const [result, setResult] = useState(null);
 
-  const stockfishWorker = useRef(null);
+  // const stockfishWorker = useRef(null);
+
+  // Engine wrapper
+  const engineRef = useRef(null);
+  const engineReadyRef = useRef(false);
+
+
+  // Convert 'e4' to board unit coords (0..8). We used FILES and RANKS already.
+  function squareToUnitXY(sq) {
+    const file = sq[0];
+    const rank = parseInt(sq[1], 10);
+    const fx = FILES.indexOf(file);          // 0..7 (a..h)
+    const ry = RANKS.indexOf(rank);          // 0..7 (8..1, because RANKS = [8..1])
+    if (fx < 0 || ry < 0) return null;
+    // Center of the square in “board units”
+    return { x: fx + 0.5, y: ry + 0.5 };
+  }
+
+
+  function ArrowOverlay({ bestMove, show }) {
+    if (!show || !bestMove) return null;
+
+    const from = bestMove.slice(0, 2);
+    const to = bestMove.slice(2, 4);
+
+    const p1 = squareToUnitXY(from);
+    const p2 = squareToUnitXY(to);
+    if (!p1 || !p2) return null;
+
+    return (
+      <svg
+        viewBox="0 0 8 8"
+        preserveAspectRatio="none"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        {/* Arrowhead */}
+        <defs>
+          {/* <marker
+            id="arrowhead"
+            markerWidth="8"
+            markerHeight="8"
+            refX="6"
+            refY="3.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 7 3.5, 0 7" fill="rgba(16,185,129,0.95)" />
+          </marker> */}
+          <marker
+            id="arrowhead"
+            markerWidth="5"
+            markerHeight="5"
+            refX="4"
+            refY="2.5"
+            orient="auto"
+          >
+            <polygon points="0 0, 5 2.5, 0 5" fill="rgba(16,185,129,0.7)" />
+          </marker>
+
+        </defs>
+
+        {/* Main arrow line */}
+        <line
+          x1={p1.x}
+          y1={p1.y}
+          x2={p2.x}
+          y2={p2.y}
+          stroke="rgba(16,185,129,0.6)" // more transparent
+          strokeWidth="0.12"            // thinner
+          strokeLinecap="round"
+          markerEnd="url(#arrowhead)"
+          style={{ filter: 'drop-shadow(0 0 0.15px rgba(0,0,0,0.5))' }}
+        />
+
+      </svg>
+    );
+  }
 
   // Initialize Stockfish
+  // useEffect(() => {
+  //   // Use Stockfish web worker
+  //   stockfishWorker.current = new Worker('/stockfish.js');
+
+  //   stockfishWorker.current.onmessage = (e) => {
+  //     const message = e.data;
+
+  //     if (message.includes('bestmove')) {
+  //       const match = message.match(/bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+  //       if (match) {
+  //         setBestMove(match[1]);
+  //         setThinking(false);
+  //       }
+  //     }
+
+  //     if (message.includes('score cp')) {
+  //       const match = message.match(/score cp (-?\d+)/);
+  //       if (match) {
+  //         setEvaluation(parseInt(match[1]) / 100);
+  //       }
+  //     }
+
+  //     if (message.includes('score mate')) {
+  //       const match = message.match(/score mate (-?\d+)/);
+  //       if (match) {
+  //         const mateIn = parseInt(match[1]);
+  //         setEvaluation(mateIn > 0 ? 100 : -100);
+  //       }
+  //     }
+  //   };
+
+  //   // Initialize Stockfish
+  //   stockfishWorker.current.postMessage('uci');
+  //   stockfishWorker.current.postMessage('isready');
+
+  //   return () => {
+  //     stockfishWorker.current?.terminate();
+  //   };
+  // }, []);
+
+  // Initialize Stockfish (via wrapper)
   useEffect(() => {
-    // Use Stockfish web worker
-    stockfishWorker.current = new Worker('/stockfish.js');
-
-    stockfishWorker.current.onmessage = (e) => {
-      const message = e.data;
-
-      if (message.includes('bestmove')) {
-        const match = message.match(/bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
-        if (match) {
-          setBestMove(match[1]);
-          setThinking(false);
-        }
+    const engine = new StockfishClient('/stockfish.js');
+    engineRef.current = engine;
+    // Listen to all engine lines and parse what we need
+    const off = engine.onMessage((msg) => {
+      // mark ready (the wrapper already resolves waitReady on readyok)
+      if (msg.includes('readyok')) engineReadyRef.current = true;
+      if (msg.includes('bestmove')) {
+        const m = msg.match(/bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if (m) { setBestMove(m[1]); setThinking(false); }
       }
-
-      if (message.includes('score cp')) {
-        const match = message.match(/score cp (-?\d+)/);
-        if (match) {
-          setEvaluation(parseInt(match[1]) / 100);
-        }
-      }
-
-      if (message.includes('score mate')) {
-        const match = message.match(/score mate (-?\d+)/);
-        if (match) {
-          const mateIn = parseInt(match[1]);
-          setEvaluation(mateIn > 0 ? 100 : -100);
-        }
-      }
-    };
-
-    // Initialize Stockfish
-    stockfishWorker.current.postMessage('uci');
-    stockfishWorker.current.postMessage('isready');
-
+      // evaluations
+      const cp = msg.match(/score cp (-?\d+)/);
+      const mate = msg.match(/score mate (-?\d+)/);
+      if (cp) setEvaluation(parseInt(cp[1], 10) / 100);
+      if (mate) setEvaluation(parseInt(mate[1], 10) > 0 ? 100 : -100);
+    });
+    // ensure we run uci boot (wrapper does it automatically on first “Stockfish” line)
+    engine.waitReady().then(() => { engineReadyRef.current = true; });
     return () => {
-      stockfishWorker.current?.terminate();
+      off();
+      engineRef.current?.terminate();
+      engineRef.current = null;
+      engineReadyRef.current = false;
     };
   }, []);
 
+
+
   // Request analysis from Stockfish
+  // const requestAnalysis = useCallback(() => {
+  //   if (!stockfishWorker.current) return;
+
+  //   setThinking(true);
+  //   stockfishWorker.current.postMessage('stop');
+  //   stockfishWorker.current.postMessage(`position fen ${game.fen()}`);
+  //   stockfishWorker.current.postMessage('go depth 18');
+  // }, [game]);
+
+
   const requestAnalysis = useCallback(() => {
-    if (!stockfishWorker.current) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+
+    if (!engineReadyRef.current) {
+      // wait for ready, then retry once
+      engine.waitReady().then(() => {
+        engineReadyRef.current = true;
+        requestAnalysis();
+      });
+      return;
+    }
 
     setThinking(true);
-    stockfishWorker.current.postMessage('stop');
-    stockfishWorker.current.postMessage(`position fen ${game.fen()}`);
-    stockfishWorker.current.postMessage('go depth 18');
+    engine.stop();
+    engine.ucinewgame();
+    engine.setOption('MultiPV', 1);        // adjust if you add multi-line later
+    engine.positionFen(game.fen());
+    engine.goDepth(18);                    // or engine.goMovetime(1000)
   }, [game]);
 
   // Make computer move
@@ -273,7 +405,7 @@ export default function GamePlay({ initialFen, onBack }) {
       const isLegalMove = legalMoves.includes(square);
       const isLastMove = moveHistory.length > 0 &&
         (moveHistory[moveHistory.length - 1].from === square ||
-         moveHistory[moveHistory.length - 1].to === square);
+          moveHistory[moveHistory.length - 1].to === square);
 
       board.push({ square, piece, isLight, isSelected, isLegalMove, isLastMove });
     }
@@ -345,6 +477,12 @@ export default function GamePlay({ initialFen, onBack }) {
               description="Watch AI play itself"
               onClick={() => startGame('cvc')}
             />
+            <ModeButton
+              icon="🔍"
+              title="Analyze Position"
+              description="Explore moves with Stockfish"
+              onClick={() => startGame('analyze')}
+            />
           </div>
 
           <button
@@ -400,9 +538,14 @@ export default function GamePlay({ initialFen, onBack }) {
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent'
             }}>
-              {gameMode === 'hvh' ? '👥 Human vs Human' :
-               gameMode === 'hvc' ? `🤖 Playing as ${playerColor === 'white' ? 'White ♔' : 'Black ♚'}` :
-               '🤖⚔️🤖 Computer vs Computer'}
+              {/* {gameMode === 'hvh' ? '👥 Human vs Human' :
+                gameMode === 'hvc' ? `🤖 Playing as ${playerColor === 'white' ? 'White ♔' : 'Black ♚'}` :
+                  '🤖⚔️🤖 Computer vs Computer'} */}
+
+              {gameMode === 'hvh' ? '👥 Human vs Human'
+                : gameMode === 'hvc' ? `🤖 Playing as ${playerColor === 'white' ? 'White ♔' : 'Black ♚'}`
+                  : gameMode === 'cvc' ? '🤖⚔️🤖 Computer vs Computer'
+                    : '🔍 Analysis Mode'}
             </h2>
             <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>
               {game.turn() === 'w' ? "White's turn" : "Black's turn"}
@@ -433,7 +576,7 @@ export default function GamePlay({ initialFen, onBack }) {
             <EvaluationBar evaluation={evaluation} turn={game.turn()} />
 
             {/* Chess Board */}
-            <div style={{
+            {/* <div style={{
               border: '4px solid #8b5cf6',
               borderRadius: 12,
               overflow: 'hidden',
@@ -443,6 +586,18 @@ export default function GamePlay({ initialFen, onBack }) {
               width: 560,
               height: 560,
               margin: '0 auto'
+            }}> */}
+            <div style={{
+              border: '4px solid #8b5cf6',
+              borderRadius: 12,
+              overflow: 'hidden',
+              boxShadow: '0 10px 40px rgba(139, 92, 246, 0.3)',
+              background: '#312e81',
+              padding: 12,
+              width: 560,
+              height: 560,
+              margin: '0 auto',
+              position: 'relative' // <-- important for overlay
             }}>
               <div style={{
                 display: 'grid',
@@ -452,89 +607,124 @@ export default function GamePlay({ initialFen, onBack }) {
                 height: '100%',
                 gap: 0
               }}>
-                {board.map(({ square, piece, isLight, isSelected, isLegalMove, isLastMove }) => (
+                {/* {board.map(({ square, piece, isLight, isSelected, isLegalMove, isLastMove }) => (
+                  
                   <div
                     key={square}
                     onClick={() => onSquareClick(square)}
                     style={{
                       position: 'relative',
                       background: isSelected ? '#f59e0b' :
-                                isLastMove ? '#93c5fd' :
-                                isLight ? '#f0d9b5' : '#b58863',
+                        isLastMove ? '#93c5fd' :
+                          isLight ? '#f0d9b5' : '#b58863',
                       cursor: 'pointer',
                       transition: 'background 0.2s ease'
                     }}
-                  >
-                    {/* Coordinates */}
-                    {square[0] === 'a' && (
-                      <div style={{
-                        position: 'absolute',
-                        left: 4,
-                        top: 4,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: isLight ? '#b58863' : '#f0d9b5',
-                        opacity: 0.7,
-                        userSelect: 'none'
-                      }}>
-                        {square[1]}
-                      </div>
-                    )}
-                    {square[1] === '1' && (
-                      <div style={{
-                        position: 'absolute',
-                        right: 4,
-                        bottom: 4,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        color: isLight ? '#b58863' : '#f0d9b5',
-                        opacity: 0.7,
-                        userSelect: 'none'
-                      }}>
-                        {square[0]}
-                      </div>
-                    )}
+                  > */}
+                {board.map(({ square, piece, isLight, isSelected, isLegalMove, isLastMove }) => {
+                  const bestMoveFrom = bestMove ? bestMove.slice(0, 2) : null;
+                  const bestMoveTo = bestMove ? bestMove.slice(2, 4) : null;
+                  const isBestMoveSquare =
+                    gameMode === 'analyze' &&
+                    bestMove &&
+                    (square === bestMoveFrom || square === bestMoveTo);
 
-                    {/* Piece */}
-                    {piece && (
-                      <img
-                        src={getPieceImageUrl(piece.color === 'w' ?
-                          piece.type.toUpperCase() : piece.type.toLowerCase())}
-                        alt={piece.type}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                          padding: '8%',
-                          userSelect: 'none',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    )}
-
-                    {/* Legal move indicator */}
-                    {isLegalMove && (
-                      <div style={{
-                        position: 'absolute',
-                        inset: 0,
-                        display: 'grid',
-                        placeItems: 'center',
-                        pointerEvents: 'none'
-                      }}>
+                  return (
+                    <div
+                      key={square}
+                      onClick={() => onSquareClick(square)}
+                      style={{
+                        position: 'relative',
+                        background: isSelected
+                          ? '#f59e0b'
+                          : isBestMoveSquare
+                            ? 'rgba(16,185,129,0.35)' // ✅ highlight best-move squares (green)
+                            : isLastMove
+                              ? '#93c5fd'
+                              : isLight
+                                ? '#f0d9b5'
+                                : '#b58863',
+                        
+                        cursor: 'pointer',
+                        transition: 'background 0.2s ease',
+                      }}
+                    >
+                      {/* Coordinates */}
+                      {square[0] === 'a' && (
                         <div style={{
-                          width: piece ? '100%' : '30%',
-                          height: piece ? '100%' : '30%',
-                          borderRadius: '50%',
-                          background: piece ?
-                            'radial-gradient(circle, transparent 65%, rgba(34, 197, 94, 0.5) 65%)' :
-                            'rgba(34, 197, 94, 0.4)',
-                          border: piece ? 'none' : '3px solid rgba(34, 197, 94, 0.6)'
-                        }}/>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                          position: 'absolute',
+                          left: 4,
+                          top: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: isLight ? '#b58863' : '#f0d9b5',
+                          opacity: 0.7,
+                          userSelect: 'none'
+                        }}>
+                          {square[1]}
+                        </div>
+                      )}
+                      {square[1] === '1' && (
+                        <div style={{
+                          position: 'absolute',
+                          right: 4,
+                          bottom: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: isLight ? '#b58863' : '#f0d9b5',
+                          opacity: 0.7,
+                          userSelect: 'none'
+                        }}>
+                          {square[0]}
+                        </div>
+                      )}
+
+                      {/* Piece */}
+                      {piece && (
+                        <img
+                          src={getPieceImageUrl(piece.color === 'w' ?
+                            piece.type.toUpperCase() : piece.type.toLowerCase())}
+                          alt={piece.type}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            padding: '8%',
+                            userSelect: 'none',
+                            pointerEvents: 'none'
+                          }}
+                        />
+                      )}
+
+                      {/* Legal move indicator */}
+                      {isLegalMove && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'grid',
+                          placeItems: 'center',
+                          pointerEvents: 'none'
+                        }}>
+                          <div style={{
+                            width: piece ? '100%' : '30%',
+                            height: piece ? '100%' : '30%',
+                            borderRadius: '50%',
+                            background: piece ?
+                              'radial-gradient(circle, transparent 65%, rgba(34, 197, 94, 0.5) 65%)' :
+                              'rgba(34, 197, 94, 0.4)',
+                            border: piece ? 'none' : '3px solid rgba(34, 197, 94, 0.6)'
+                          }} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+              {/* Draw engine arrow only when analyzing (or change condition to always show) */}
+              <ArrowOverlay
+                bestMove={bestMove}
+                show={gameMode === 'analyze'}   // or: show={!!bestMove && showBestMove}
+              />
             </div>
 
             {/* Best Move Display */}
@@ -740,7 +930,7 @@ function EvaluationBar({ evaluation, turn }) {
         width: `${whitePercent}%`,
         background: 'linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 100%)',
         transition: 'width 0.5s ease'
-      }}/>
+      }} />
       <div style={{
         position: 'absolute',
         inset: 0,
