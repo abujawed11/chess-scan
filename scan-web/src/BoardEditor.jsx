@@ -97,8 +97,8 @@ function validateFen(fen){
   catch(e){ return {valid:false, reason:e?.message || "Invalid FEN"}; }
 }
 
-// Validate position rules
-function validatePosition(pieces, newSquare, newPiece) {
+// Validate position rules - for placement (lenient, allows building)
+function validatePlacement(pieces, newSquare, newPiece) {
   // Create a temporary pieces object with the new piece
   const tempPieces = { ...pieces };
   if (newSquare && newPiece) {
@@ -124,7 +124,46 @@ function validatePosition(pieces, newSquare, newPiece) {
     }
   }
 
-  // Validate piece counts
+  // Validate piece counts (blocking rules during placement)
+  if (pieceCounts['K'] > 1) errors.push('Cannot have more than 1 white king');
+  if (pieceCounts['k'] > 1) errors.push('Cannot have more than 1 black king');
+  if (pieceCounts['P'] > 8) errors.push('Cannot have more than 8 white pawns');
+  if (pieceCounts['p'] > 8) errors.push('Cannot have more than 8 black pawns');
+
+  // Count total pieces per color
+  const whiteTotal = pieceCounts['K'] + pieceCounts['Q'] + pieceCounts['R'] +
+                     pieceCounts['B'] + pieceCounts['N'] + pieceCounts['P'];
+  const blackTotal = pieceCounts['k'] + pieceCounts['q'] + pieceCounts['r'] +
+                     pieceCounts['b'] + pieceCounts['n'] + pieceCounts['p'];
+
+  if (whiteTotal > 16) errors.push('White cannot have more than 16 pieces');
+  if (blackTotal > 16) errors.push('Black cannot have more than 16 pieces');
+
+  return { valid: errors.length === 0, errors };
+}
+
+// Validate complete position - for finishing (strict, requires both kings)
+function validateCompletePosition(pieces) {
+  const errors = [];
+  const pieceCounts = {
+    'K': 0, 'Q': 0, 'R': 0, 'B': 0, 'N': 0, 'P': 0,
+    'k': 0, 'q': 0, 'r': 0, 'b': 0, 'n': 0, 'p': 0
+  };
+
+  // Count pieces
+  for (const [square, piece] of Object.entries(pieces)) {
+    if (pieceCounts[piece] !== undefined) {
+      pieceCounts[piece]++;
+    }
+
+    // Check pawns on first/last rank
+    const rank = parseInt(square[1]);
+    if ((piece === 'P' || piece === 'p') && (rank === 1 || rank === 8)) {
+      errors.push(`Pawns cannot be placed on rank ${rank}`);
+    }
+  }
+
+  // Strict validation for complete position
   if (pieceCounts['K'] > 1) errors.push('Cannot have more than 1 white king');
   if (pieceCounts['k'] > 1) errors.push('Cannot have more than 1 black king');
   if (pieceCounts['K'] === 0) errors.push('White king is required');
@@ -162,9 +201,9 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   const fen = useMemo(() => buildFen({ pieces, side, castling, ep }), [pieces, side, castling, ep]);
   const fenStatus = useMemo(() => validateFen(fen), [fen]);
 
-  // Validate position whenever pieces change
+  // Validate complete position for display warnings (but don't block placement)
   useEffect(() => {
-    const validation = validatePosition(pieces);
+    const validation = validateCompletePosition(pieces);
     setValidationErrors(validation.errors);
   }, [pieces]);
 
@@ -182,8 +221,8 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   function flipBoard(){ setFlipped(f => !f); }
 
   function placePiece(square, piece){
-    // Validate before placing
-    const validation = validatePosition(pieces, square, piece);
+    // Validate before placing (lenient - allows building position piece by piece)
+    const validation = validatePlacement(pieces, square, piece);
 
     if (!validation.valid) {
       // Show error briefly
@@ -206,15 +245,16 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
     // Create temp pieces for validation
     const tempPieces = {...pieces};
     delete tempPieces[from];
-    tempPieces[to] = piece;
 
-    const validation = validatePosition(tempPieces);
+    // Validate the new position (lenient - allows building)
+    const validation = validatePlacement(tempPieces, to, piece);
 
     if (!validation.valid) {
       alert(validation.errors.join('\n'));
       return false;
     }
 
+    tempPieces[to] = piece;
     setPieces(tempPieces);
     return true;
   }
@@ -288,7 +328,12 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
     setDragFrom(null);
   }
 
-  function onDragEnd(){
+  function onDragEnd(e){
+    // If piece was dragged outside the board and not dropped on a square, remove it
+    if (dragFrom && dragFrom !== '_PALETTE_' && !dragOverSquare) {
+      // Piece was dragged from board but not dropped on any square - remove it
+      removePiece(dragFrom);
+    }
     setDragPiece(null);
     setDragFrom(null);
     setDragOverSquare(null);
@@ -325,11 +370,26 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   }
 
   return (
-    <div style={{
-      padding: 20,
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      minHeight: '100vh'
-    }}>
+    <>
+      {/* CSS for animations */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.05);
+            opacity: 0.9;
+          }
+        }
+      `}</style>
+
+      <div style={{
+        padding: 20,
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        minHeight: '100vh'
+      }}>
       <div style={{
         maxWidth: 1400,
         margin: '0 auto',
@@ -455,11 +515,17 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
         {/* Board + Palettes - FIXED LAYOUT */}
         <div style={{
           display: 'flex',
-          justifyContent: 'center',
-          gap: 24,
-          alignItems: 'flex-start',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 16,
           marginBottom: 24
         }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: 24,
+            alignItems: 'flex-start'
+          }}>
           {/* White Palette */}
           <div style={{ flexShrink: 0 }}>
             <PieceStrip
@@ -614,6 +680,28 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
               color="black"
             />
           </div>
+          </div>
+
+          {/* Remove Zone */}
+          {dragPiece && dragFrom !== '_PALETTE_' && (
+            <div style={{
+              padding: '16px 32px',
+              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+              borderRadius: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              color: 'white',
+              fontWeight: 600,
+              fontSize: 15,
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
+              animation: 'pulse 2s infinite',
+              border: '2px dashed rgba(255, 255, 255, 0.5)'
+            }}>
+              <span style={{ fontSize: 24 }}>🗑️</span>
+              <span>Drag piece here to remove</span>
+            </div>
+          )}
         </div>
 
         {/* Bottom Controls */}
@@ -728,10 +816,12 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
           color: '#1e40af'
         }}>
           <strong>💡 Tips:</strong> Drag pieces from palettes to board • Drag between squares to move •
-          Right-click to remove • Shift+drag to copy • Position rules enforced (1 king per color, max 8 pawns, etc.)
+          <strong> Drag outside board to remove</strong> • Right-click to remove • Shift+drag to copy •
+          Position rules enforced (1 king per color, max 8 pawns, etc.)
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
