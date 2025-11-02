@@ -324,6 +324,7 @@ function App() {
 
   // For manual grid adjuster
   const [warpedBoard, setWarpedBoard] = useState(null)  // base64 PNG from /extract-grid
+  const [originalImageDataUrl, setOriginalImageDataUrl] = useState(null) // base64 original image
   const [gridSegments, setGridSegments] = useState({ h: null, v: null })
 
   const handleImageSelect = (event) => {
@@ -336,6 +337,13 @@ function App() {
     setError(null)
     setExtractedSquares(null)
     setMode('home')
+
+    // Convert to base64 data URL for GridAdjuster fallback
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      setOriginalImageDataUrl(e.target.result) // e.g., "data:image/jpeg;base64,..."
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleExtractSquares = async () => {
@@ -347,38 +355,7 @@ function App() {
     formData.append('image', selectedImage)
 
     try {
-      const response = await fetch('http://localhost:3000/api/vision/extract-squares', {
-        method: 'POST',
-        body: formData,
-      })
-      const data = await response.json()
-
-      if (!response.ok || !data.boardDetected) {
-        // If the auto method failed or looks wrong, jump to manual adjuster
-        setError(data?.message || `HTTP ${response.status}`)
-        setMode('adjust')
-        return
-      }
-
-      setExtractedSquares(data.squares)
-      setMode('editor')
-    } catch (err) {
-      setError(err.message)
-      setMode('adjust') // allow user to fix manually
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleOpenAdjuster = async () => {
-    if (!selectedImage) return
-    setLoading(true)
-    setError(null)
-
-    const formData = new FormData()
-    formData.append('image', selectedImage)
-
-    try {
+      // Always use /extract-grid so user can verify/adjust alignment
       const response = await fetch('http://localhost:3000/api/vision/extract-grid', {
         method: 'POST',
         body: formData,
@@ -386,19 +363,21 @@ function App() {
       const data = await response.json()
 
       if (!response.ok || !data.boardDetected) {
-        setError(data?.message || 'Could not detect board for manual adjustment')
+        setError(data?.message || 'Could not detect board')
         return
       }
 
+      // Load the grid adjuster with auto-detected grid
       setWarpedBoard(data.warpedBoard)
       setGridSegments({ h: data.hSegments, v: data.vSegments })
       setMode('adjust')
     } catch (err) {
-      setError(`Failed to prepare grid adjuster: ${err.message}`)
+      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
+
 
   const handleEditorComplete = (fenData) => {
     setResult(fenData)
@@ -418,10 +397,11 @@ function App() {
     )
   }
 
-  if (mode === 'adjust' && warpedBoard) {
+  if (mode === 'adjust' && (warpedBoard || originalImageDataUrl)) {
     return (
       <GridAdjuster
         warpedBoard={warpedBoard}
+        originalImage={originalImageDataUrl}
         initH={gridSegments.h}
         initV={gridSegments.v}
         onCancel={() => setMode('home')}
@@ -468,15 +448,23 @@ function App() {
       {/* Options */}
       {preview && (
         <>
-          <div style={{ marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: 12 }}>
             <button onClick={handleExtractSquares} disabled={loading}
-              style={{ padding: '10px 18px', background: loading ? '#bbb' : '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600 }}>
-              {loading ? '🔄 Extracting...' : '🎨 Open Visual Editor'}
+              style={{
+                padding: '12px 24px',
+                background: loading ? '#bbb' : '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 600,
+                fontSize: '1rem',
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}>
+              {loading ? '🔄 Detecting board...' : '🎯 Start → Adjust Grid & Extract'}
             </button>
-            <button onClick={handleOpenAdjuster} disabled={loading}
-              style={{ padding: '10px 18px', background: loading ? '#bbb' : '#2563eb', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer' }}>
-              {loading ? '🔄 Loading...' : '✏️ Adjust Grid Manually'}
-            </button>
+            <p style={{ fontSize: '0.85rem', color: '#666', marginTop: 8 }}>
+              Auto-detects the board, then lets you fine-tune the grid alignment before extracting pieces.
+            </p>
           </div>
 
           {/* Orientation (kept from your version) */}
@@ -489,8 +477,11 @@ function App() {
       {/* Error */}
       {error && (
         <div style={{ padding: 12, background: '#fee', border: '1px solid #fcc', borderRadius: 6, marginBottom: 16 }}>
-          <strong>❌ {error}</strong>
-          <div style={{ marginTop: 6 }}>Tip: Click “Adjust Grid Manually” to drag the four corners.</div>
+          <strong>❌ Error:</strong> {error}
+          <div style={{ marginTop: 6, fontSize: '0.9rem', color: '#666' }}>
+            <b>Tips:</b> Make sure the board is clearly visible, well-lit, and fills most of the image.
+            Avoid extreme angles or reflections.
+          </div>
         </div>
       )}
 
