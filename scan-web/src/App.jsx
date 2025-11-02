@@ -507,6 +507,7 @@ import { useState } from 'react'
 import VisualEditor from './VisualEditor'
 import GridAdjuster from './GridAdjuster'     // shows/edits grid lines, returns 64 crops
 import BoardEditor from './BoardEditor'       // full final editor (flip, rotate, castling, etc.)
+import GamePlay from './GamePlay'             // chess gameplay with Stockfish integration
 
 function App() {
   const [selectedImage, setSelectedImage] = useState(null)
@@ -515,7 +516,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // flow control: 'home' | 'adjust' | 'editor' | 'board'
+  // flow control: 'home' | 'adjust' | 'editor' | 'board' | 'play'
   const [mode, setMode] = useState('home')
 
   // extracted squares and grid adjuster state
@@ -526,6 +527,9 @@ function App() {
 
   // final board fen to send into BoardEditor
   const [boardFen, setBoardFen] = useState(null)
+
+  // game fen for GamePlay component
+  const [gameFen, setGameFen] = useState(null)
 
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0]
@@ -593,8 +597,15 @@ function App() {
   }
 
   const handleBoardDone = (finalData) => {
-    setResult({ fen: finalData.fen, confidence: 1 })
-    setMode('home')
+    // Check if user clicked Play button
+    if (finalData.action === 'play') {
+      setGameFen(finalData.fen)
+      setMode('play')
+    } else {
+      // Regular save - go back to home with result
+      setResult({ fen: finalData.fen, confidence: 1 })
+      setMode('home')
+    }
   }
 
   // ---------- Screens ----------
@@ -627,6 +638,17 @@ function App() {
         initialFen={boardFen}
         onCancel={() => setMode('home')}
         onDone={handleBoardDone}
+      />
+    )
+  }
+
+  if (mode === 'play' && gameFen) {
+    return (
+      <GamePlay
+        initialFen={gameFen}
+        onBack={() => {
+          setMode('board')
+        }}
       />
     )
   }

@@ -446,7 +446,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
               ✕ Cancel
             </ToolbarBtn>
             <ToolbarBtn
-              onClick={() => onDone?.({ fen, pieces, side, castling, ep })}
+              onClick={() => onDone?.({ fen, pieces, side, castling, ep, action: 'save' })}
               disabled={!fenStatus.valid || validationErrors.length > 0}
               style={{
                 background: (fenStatus.valid && validationErrors.length === 0)
@@ -456,7 +456,20 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
                 fontWeight: 600
               }}
             >
-              ✓ Done
+              ✓ Save
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => onDone?.({ fen, pieces, side, castling, ep, action: 'play' })}
+              disabled={!fenStatus.valid || validationErrors.length > 0}
+              style={{
+                background: (fenStatus.valid && validationErrors.length === 0)
+                  ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+                  : '#ccc',
+                color: '#fff',
+                fontWeight: 600
+              }}
+            >
+              ▶️ Play
             </ToolbarBtn>
           </div>
         </div>
