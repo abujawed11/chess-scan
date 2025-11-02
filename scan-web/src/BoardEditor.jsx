@@ -196,6 +196,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   const [dragPiece, setDragPiece] = useState(null);
   const [dragFrom, setDragFrom] = useState(null);
   const [dragOverSquare, setDragOverSquare] = useState(null);
+  const [dragOverBin, setDragOverBin] = useState(false);
   const [validationErrors, setValidationErrors] = useState([]);
 
   const fen = useMemo(() => buildFen({ pieces, side, castling, ep }), [pieces, side, castling, ep]);
@@ -329,14 +330,35 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   }
 
   function onDragEnd(e){
-    // If piece was dragged outside the board and not dropped on a square, remove it
-    if (dragFrom && dragFrom !== '_PALETTE_' && !dragOverSquare) {
-      // Piece was dragged from board but not dropped on any square - remove it
-      removePiece(dragFrom);
-    }
+    // Clean up drag state
     setDragPiece(null);
     setDragFrom(null);
     setDragOverSquare(null);
+    setDragOverBin(false);
+  }
+
+  // Trash bin handlers
+  function onDragOverBin(e){
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverBin(true);
+  }
+
+  function onDragLeaveBin(e){
+    setDragOverBin(false);
+  }
+
+  function onDropBin(e){
+    e.preventDefault();
+    setDragOverBin(false);
+
+    // Only remove if dragging from board (not from palette)
+    if (dragFrom && dragFrom !== '_PALETTE_') {
+      removePiece(dragFrom);
+    }
+
+    setDragPiece(null);
+    setDragFrom(null);
   }
 
   function onSquareClick(square, e){
@@ -682,24 +704,111 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
           </div>
           </div>
 
-          {/* Remove Zone */}
+          {/* Trash Bin - Always visible */}
           {dragPiece && dragFrom !== '_PALETTE_' && (
-            <div style={{
-              padding: '16px 32px',
-              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-              borderRadius: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              color: 'white',
-              fontWeight: 600,
-              fontSize: 15,
-              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)',
-              animation: 'pulse 2s infinite',
-              border: '2px dashed rgba(255, 255, 255, 0.5)'
-            }}>
-              <span style={{ fontSize: 24 }}>🗑️</span>
-              <span>Drag piece here to remove</span>
+            <div
+              onDragOver={onDragOverBin}
+              onDragLeave={onDragLeaveBin}
+              onDrop={onDropBin}
+              style={{
+                position: 'relative',
+                padding: '20px 40px',
+                background: dragOverBin
+                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                  : 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+                borderRadius: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 12,
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: dragOverBin
+                  ? '0 8px 24px rgba(239, 68, 68, 0.4)'
+                  : '0 4px 12px rgba(0, 0, 0, 0.2)',
+                border: dragOverBin ? '3px solid #fca5a5' : '3px solid transparent',
+                transform: dragOverBin ? 'scale(1.1)' : 'scale(1)'
+              }}
+            >
+              {/* Trash Bin SVG */}
+              <svg
+                width="64"
+                height="64"
+                viewBox="0 0 64 64"
+                style={{
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+                }}
+              >
+                {/* Bin Body */}
+                <rect
+                  x="16"
+                  y="24"
+                  width="32"
+                  height="32"
+                  rx="2"
+                  fill="white"
+                  stroke={dragOverBin ? '#fca5a5' : '#d1d5db'}
+                  strokeWidth="2"
+                />
+
+                {/* Bin Lines */}
+                <line x1="22" y1="30" x2="22" y2="50" stroke={dragOverBin ? '#ef4444' : '#9ca3af'} strokeWidth="2" strokeLinecap="round"/>
+                <line x1="32" y1="30" x2="32" y2="50" stroke={dragOverBin ? '#ef4444' : '#9ca3af'} strokeWidth="2" strokeLinecap="round"/>
+                <line x1="42" y1="30" x2="42" y2="50" stroke={dragOverBin ? '#ef4444' : '#9ca3af'} strokeWidth="2" strokeLinecap="round"/>
+
+                {/* Bin Rim */}
+                <rect
+                  x="12"
+                  y="20"
+                  width="40"
+                  height="4"
+                  rx="1"
+                  fill="white"
+                  stroke={dragOverBin ? '#fca5a5' : '#d1d5db'}
+                  strokeWidth="2"
+                />
+
+                {/* Bin Lid - Animated */}
+                <g
+                  style={{
+                    transform: dragOverBin ? 'rotate(-25deg)' : 'rotate(0deg)',
+                    transformOrigin: '24px 18px',
+                    transition: 'transform 0.3s ease'
+                  }}
+                >
+                  <rect
+                    x="20"
+                    y="14"
+                    width="24"
+                    height="4"
+                    rx="1"
+                    fill="white"
+                    stroke={dragOverBin ? '#fca5a5' : '#d1d5db'}
+                    strokeWidth="2"
+                  />
+                  <rect
+                    x="28"
+                    y="10"
+                    width="8"
+                    height="4"
+                    rx="1"
+                    fill="white"
+                    stroke={dragOverBin ? '#fca5a5' : '#d1d5db'}
+                    strokeWidth="2"
+                  />
+                </g>
+              </svg>
+
+              {/* Text */}
+              <div style={{
+                color: 'white',
+                fontWeight: 600,
+                fontSize: 14,
+                textAlign: 'center',
+                textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+              }}>
+                {dragOverBin ? '🔥 Drop to Delete!' : '🗑️ Drag here to remove'}
+              </div>
             </div>
           )}
         </div>
@@ -816,7 +925,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
           color: '#1e40af'
         }}>
           <strong>💡 Tips:</strong> Drag pieces from palettes to board • Drag between squares to move •
-          <strong> Drag outside board to remove</strong> • Right-click to remove • Shift+drag to copy •
+          <strong> Drag to trash bin to remove</strong> • Right-click to remove • Shift+drag to copy •
           Position rules enforced (1 king per color, max 8 pawns, etc.)
         </div>
       </div>
