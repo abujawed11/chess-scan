@@ -1,25 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Chess } from "chess.js/dist/esm/chess.js"; // vite-friendly
+import { Chess } from "chess.js/dist/esm/chess.js";
 
-// --- piece palette (unicode labels only for tooltips) ---
+// --- piece palette ---
 const WHITE = ["K", "Q", "R", "B", "N", "P"];
 const BLACK = ["k", "q", "r", "b", "n", "p"];
 
 const FILES = ["a","b","c","d","e","f","g","h"];
 const RANKS = [8,7,6,5,4,3,2,1];
 
+// Chess piece images from Lichess (high quality SVG)
+function getPieceImageUrl(piece) {
+  const pieceMap = {
+    'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
+    'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP'
+  };
+  const pieceName = pieceMap[piece];
+  return `https://lichess1.org/assets/piece/cburnett/${pieceName}.svg`;
+}
+
 // ---------- helpers: fen <-> board map ----------
 function buildFen({ pieces, side, castling, ep }) {
-  // pieces: { "e4": "K" | "p" ... }
   const board = Array(64).fill(".");
   for (const [pos, piece] of Object.entries(pieces)) {
-    const file = pos.charCodeAt(0) - 97; // 0..7
-    const rank = parseInt(pos[1], 10);   // 1..8
-    const idx = (8 - rank) * 8 + file;   // a8..h1
+    const file = pos.charCodeAt(0) - 97;
+    const rank = parseInt(pos[1], 10);
+    const idx = (8 - rank) * 8 + file;
     board[idx] = piece;
   }
 
-  // ranks -> fen rows
   const rows = [];
   for (let r = 0; r < 8; r++) {
     let row = "";
@@ -39,7 +47,6 @@ function buildFen({ pieces, side, castling, ep }) {
 }
 
 function parseFenToState(fen) {
-  // returns { pieces, side, castling, ep }
   const [placement, side="w", castle="-", ep="-"] = fen.trim().split(/\s+/);
   const rows = placement.split("/");
   const pieces = {};
@@ -60,23 +67,22 @@ function parseFenToState(fen) {
   return { pieces, side, castling: cs, ep: ep === "-" ? "" : ep };
 }
 
-function inferCastlingRights(board64 /* '.' or piece, a8..h1*/){
+function inferCastlingRights(board64){
   const at = (f,r) => board64[r*8 + f];
   const rights = [];
-  // white
-  const wk  = at(4,7)==="K"; // e1
-  const wra = at(0,7)==="R"; // a1
-  const wrh = at(7,7)==="R"; // h1
+  const wk  = at(4,7)==="K";
+  const wra = at(0,7)==="R";
+  const wrh = at(7,7)==="R";
   if (wk && wrh) rights.push("K");
   if (wk && wra) rights.push("Q");
-  // black
-  const bk  = at(4,0)==="k"; // e8
-  const bra = at(0,0)==="r"; // a8
-  const brh = at(7,0)==="r"; // h8
+  const bk  = at(4,0)==="k";
+  const bra = at(0,0)==="r";
+  const brh = at(7,0)==="r";
   if (bk && brh) rights.push("k");
   if (bk && bra) rights.push("q");
   return rights.length ? rights.join("") : "-";
 }
+
 function sanitizeOrInferCastling(legal, chosen){
   if (!chosen) return legal;
   const any = Object.values(chosen).some(Boolean);
@@ -85,20 +91,60 @@ function sanitizeOrInferCastling(legal, chosen){
   const keep = ["K","Q","k","q"].filter(k => chosen[k] && legal.includes(k)).join("");
   return keep || "-";
 }
+
 function validateFen(fen){
   try { new Chess(fen); return {valid:true}; }
   catch(e){ return {valid:false, reason:e?.message || "Invalid FEN"}; }
 }
 
-// ---------- main editor ----------
-/**
- * Props:
- *  - initialFen?: string   (optional; default = startpos)
- *  - onDone({fen, pieces, side, castling, ep}): void
- *  - onCancel(): void
- */
+// Validate position rules
+function validatePosition(pieces, newSquare, newPiece) {
+  // Create a temporary pieces object with the new piece
+  const tempPieces = { ...pieces };
+  if (newSquare && newPiece) {
+    tempPieces[newSquare] = newPiece;
+  }
+
+  const errors = [];
+  const pieceCounts = {
+    'K': 0, 'Q': 0, 'R': 0, 'B': 0, 'N': 0, 'P': 0,
+    'k': 0, 'q': 0, 'r': 0, 'b': 0, 'n': 0, 'p': 0
+  };
+
+  // Count pieces
+  for (const [square, piece] of Object.entries(tempPieces)) {
+    if (pieceCounts[piece] !== undefined) {
+      pieceCounts[piece]++;
+    }
+
+    // Check pawns on first/last rank
+    const rank = parseInt(square[1]);
+    if ((piece === 'P' || piece === 'p') && (rank === 1 || rank === 8)) {
+      errors.push(`Pawns cannot be placed on rank ${rank}`);
+    }
+  }
+
+  // Validate piece counts
+  if (pieceCounts['K'] > 1) errors.push('Cannot have more than 1 white king');
+  if (pieceCounts['k'] > 1) errors.push('Cannot have more than 1 black king');
+  if (pieceCounts['K'] === 0) errors.push('White king is required');
+  if (pieceCounts['k'] === 0) errors.push('Black king is required');
+  if (pieceCounts['P'] > 8) errors.push('Cannot have more than 8 white pawns');
+  if (pieceCounts['p'] > 8) errors.push('Cannot have more than 8 black pawns');
+
+  // Count total pieces per color
+  const whiteTotal = pieceCounts['K'] + pieceCounts['Q'] + pieceCounts['R'] +
+                     pieceCounts['B'] + pieceCounts['N'] + pieceCounts['P'];
+  const blackTotal = pieceCounts['k'] + pieceCounts['q'] + pieceCounts['r'] +
+                     pieceCounts['b'] + pieceCounts['n'] + pieceCounts['p'];
+
+  if (whiteTotal > 16) errors.push('White cannot have more than 16 pieces');
+  if (blackTotal > 16) errors.push('Black cannot have more than 16 pieces');
+
+  return { valid: errors.length === 0, errors };
+}
+
 export default function BoardEditor({ initialFen, onDone, onCancel }) {
-  // init
   const startFen = initialFen || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   const seed = parseFenToState(startFen);
 
@@ -108,89 +154,154 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   const [ep, setEp] = useState(seed.ep);
   const [flipped, setFlipped] = useState(false);
 
-  const [dragPiece, setDragPiece] = useState(null);   // 'K','p',...
-  const [dragFrom, setDragFrom] = useState(null);     // 'e2'
-  const dragImg = useRef(null);
+  const [dragPiece, setDragPiece] = useState(null);
+  const [dragFrom, setDragFrom] = useState(null);
+  const [dragOverSquare, setDragOverSquare] = useState(null);
+  const [validationErrors, setValidationErrors] = useState([]);
 
-  // computed fen + validity
   const fen = useMemo(() => buildFen({ pieces, side, castling, ep }), [pieces, side, castling, ep]);
   const fenStatus = useMemo(() => validateFen(fen), [fen]);
 
-  // --- actions ---
+  // Validate position whenever pieces change
+  useEffect(() => {
+    const validation = validatePosition(pieces);
+    setValidationErrors(validation.errors);
+  }, [pieces]);
+
   function clearBoard(){
     setPieces({});
     setCastling({K:false,Q:false,k:false,q:false});
     setEp("");
   }
+
   function fillStart(){
     const s = parseFenToState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     setPieces(s.pieces); setSide("w"); setCastling(s.castling); setEp("");
   }
-  function flipBoard(){ setFlipped(f => !f); }
-  function rotateBoard(){ setFlipped(f => !f); } // 180° same as flip here
 
-  function placePiece(square, piece){ setPieces(prev => ({...prev, [square]: piece})); }
-  function removePiece(square){ setPieces(prev => { const n={...prev}; delete n[square]; return n; }); }
-  function movePiece(from, to){
-    setPieces(prev => {
-      const n = {...prev};
-      const p = n[from];
-      delete n[from];
-      n[to] = p;
-      return n;
-    });
+  function flipBoard(){ setFlipped(f => !f); }
+
+  function placePiece(square, piece){
+    // Validate before placing
+    const validation = validatePosition(pieces, square, piece);
+
+    if (!validation.valid) {
+      // Show error briefly
+      alert(validation.errors.join('\n'));
+      return false;
+    }
+
+    setPieces(prev => ({...prev, [square]: piece}));
+    return true;
   }
 
-  // drag handlers (free placement, not legality-checked)
-  function onDragStart(e, square){
+  function removePiece(square){
+    setPieces(prev => { const n={...prev}; delete n[square]; return n; });
+  }
+
+  function movePiece(from, to){
+    const piece = pieces[from];
+    if (!piece) return false;
+
+    // Create temp pieces for validation
+    const tempPieces = {...pieces};
+    delete tempPieces[from];
+    tempPieces[to] = piece;
+
+    const validation = validatePosition(tempPieces);
+
+    if (!validation.valid) {
+      alert(validation.errors.join('\n'));
+      return false;
+    }
+
+    setPieces(tempPieces);
+    return true;
+  }
+
+  // Fixed drag handlers
+  function onDragStartFromSquare(e, square){
     const p = pieces[square];
     if (!p) return;
-    setDragPiece(p); setDragFrom(square);
-    // nicer ghost image
-    const img = new Image(); img.src = pieceSprite(p);
-    dragImg.current = img;
-    e.dataTransfer.setDragImage(img, 24, 24);
+
+    setDragPiece(p);
+    setDragFrom(square);
+
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ piece: p, from: square }));
+
+    // Create better drag image
+    const img = new Image();
+    img.src = getPieceImageUrl(p);
+    img.onload = () => {
+      e.dataTransfer.setDragImage(img, 45, 45);
+    };
   }
+
+  function onDragStartFromPalette(e, piece){
+    setDragPiece(piece);
+    setDragFrom('_PALETTE_');
+
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', JSON.stringify({ piece, from: '_PALETTE_' }));
+
+    const img = new Image();
+    img.src = getPieceImageUrl(piece);
+    img.onload = () => {
+      e.dataTransfer.setDragImage(img, 45, 45);
+    };
+  }
+
+  function onDragOverSquare(e, square){
+    e.preventDefault();
+    e.dataTransfer.dropEffect = dragFrom === '_PALETTE_' ? 'copy' : 'move';
+    setDragOverSquare(square);
+  }
+
+  function onDragLeaveSquare(e, square){
+    if (e.currentTarget === e.target) {
+      setDragOverSquare(null);
+    }
+  }
+
   function onDropSquare(e, square){
     e.preventDefault();
+    setDragOverSquare(null);
+
     if (!dragPiece) return;
-    if (e.shiftKey) { // copy-piece
+
+    if (dragFrom === '_PALETTE_') {
+      // Place from palette
       placePiece(square, dragPiece);
-    } else {
-      // move or replace
-      movePiece(dragFrom, square);
+    } else if (dragFrom && dragFrom !== square) {
+      // Move from another square
+      if (e.shiftKey || e.ctrlKey) {
+        // Copy mode
+        placePiece(square, dragPiece);
+      } else {
+        // Move mode
+        movePiece(dragFrom, square);
+      }
     }
-    setDragPiece(null); setDragFrom(null);
-  }
-  function onDragOver(e){ e.preventDefault(); }
 
-  // palette click (click to place; right-click to remove on board)
+    setDragPiece(null);
+    setDragFrom(null);
+  }
+
+  function onDragEnd(){
+    setDragPiece(null);
+    setDragFrom(null);
+    setDragOverSquare(null);
+  }
+
   function onSquareClick(square, e){
-    if (e && e.type === "contextmenu") {
-      e.preventDefault(); removePiece(square); return;
+    if (e.type === "contextmenu") {
+      e.preventDefault();
+      removePiece(square);
+      return;
     }
-    // place currently selected from palette? We use last-clicked palette via dragPiece==="_PALETTE_" trick
   }
 
-  // simple sprite (SVG data-URI) so it works without assets
-  function pieceSprite(p){
-    // minimal unicode glyph as fallback “icon”
-    const glyph = {
-      K:"♔", Q:"♕", R:"♖", B:"♗", N:"♘", P:"♙",
-      k:"♚", q:"♛", r:"♜", b:"♝", n:"♞", p:"♟"
-    }[p] || "?";
-    const fg = p === p.toUpperCase() ? "#fff" : "#111";
-    const bg = p === p.toUpperCase() ? "#111" : "#fff";
-    const svg = encodeURIComponent(
-      `<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48'>
-         <rect width='100%' height='100%' rx='8' ry='8' fill='${bg}'/>
-         <text x='50%' y='56%' text-anchor='middle' font-size='34' font-family='Segoe UI Symbol' fill='${fg}'>${glyph}</text>
-       </svg>`
-    );
-    return `data:image/svg+xml;charset=utf-8,${svg}`;
-  }
-
-  // flip-aware iterator
   const squaresRender = [];
   for (const rank of (flipped ? RANKS.slice().reverse() : RANKS)) {
     for (const file of (flipped ? FILES.slice().reverse() : FILES)) {
@@ -198,210 +309,461 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
     }
   }
 
-  // FEN load dialog
   const [fenInput, setFenInput] = useState("");
+
   function loadFen() {
     const txt = fenInput.trim();
     const chk = validateFen(txt);
     if (!chk.valid) { alert(`Invalid FEN:\n${chk.reason}`); return; }
     const st = parseFenToState(txt);
     setPieces(st.pieces); setSide(st.side); setCastling(st.castling); setEp(st.ep);
+    setFenInput("");
   }
 
-  // (optional) best move later: call your backend / web-worker
   async function requestBestMove() {
-    // Example: if you expose /api/engine/bestmove?fen=
-    // const r = await fetch(`/api/engine/bestmove?fen=${encodeURIComponent(fen)}`);
-    // const j = await r.json(); alert(`Best move: ${j.move} (score ${j.score})`);
-    alert("Hook up Stockfish later: send current FEN to your engine and display the returned best move.");
+    alert("Hook up Stockfish: send current FEN to your engine and display the returned best move.");
   }
 
   return (
-    <div style={{ padding: 12, display: "grid", gap: 12 }}>
-      {/* Top actions like your reference screenshot */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <strong style={{ fontSize: 18 }}>Edit board</strong>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <ToolbarBtn onClick={flipBoard}>↻ Flip</ToolbarBtn>
-          <ToolbarBtn onClick={rotateBoard}>⟳ Rotate</ToolbarBtn>
-          <ToolbarBtn onClick={fillStart}>⟲ Reset</ToolbarBtn>
-          <ToolbarBtn onClick={clearBoard}>✖ Clear</ToolbarBtn>
-          <div style={{ display:"inline-flex", gap:8, alignItems:"center", padding:"6px 10px", border:"1px solid #e5e7eb", borderRadius:8, background:"#fff" }}>
-            <span style={{ opacity:.75 }}>Castling</span>
+    <div style={{
+      padding: 20,
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      minHeight: '100vh'
+    }}>
+      <div style={{
+        maxWidth: 1400,
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: 16,
+        padding: 24,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 24,
+          paddingBottom: 16,
+          borderBottom: '2px solid #f0f0f0'
+        }}>
+          <h2 style={{
+            margin: 0,
+            fontSize: 28,
+            fontWeight: 700,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            ♟️ Board Editor
+          </h2>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <ToolbarBtn onClick={() => onCancel?.()}>
+              ✕ Cancel
+            </ToolbarBtn>
+            <ToolbarBtn
+              onClick={() => onDone?.({ fen, pieces, side, castling, ep })}
+              disabled={!fenStatus.valid || validationErrors.length > 0}
+              style={{
+                background: (fenStatus.valid && validationErrors.length === 0)
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : '#ccc',
+                color: '#fff',
+                fontWeight: 600
+              }}
+            >
+              ✓ Done
+            </ToolbarBtn>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div style={{
+          display: 'flex',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 24,
+          padding: 16,
+          background: '#f9fafb',
+          borderRadius: 12
+        }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ToolbarBtn onClick={flipBoard}>↻ Flip</ToolbarBtn>
+            <ToolbarBtn onClick={fillStart}>⟲ Reset</ToolbarBtn>
+            <ToolbarBtn onClick={clearBoard}>✖ Clear</ToolbarBtn>
+          </div>
+
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            padding: '8px 14px',
+            background: 'white',
+            borderRadius: 10,
+            border: '2px solid #e5e7eb'
+          }}>
+            <span style={{ fontWeight: 600, color: '#6b7280' }}>Castling:</span>
             {["K","Q","k","q"].map(k => (
-              <label key={k} style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
-                <input type="checkbox" checked={!!castling[k]} onChange={e => setCastling(prev=>({...prev,[k]:e.target.checked}))}/>
-                {k}
+              <label key={k} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={!!castling[k]}
+                  onChange={e => setCastling(prev=>({...prev,[k]:e.target.checked}))}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 600 }}>{k}</span>
               </label>
             ))}
           </div>
-        </div>
-        <div style={{ marginLeft: "auto", display:"flex", gap:8 }}>
-          <ToolbarBtn onClick={() => navigator.clipboard.writeText(fen)}>📋 Copy FEN</ToolbarBtn>
-          <ToolbarBtn onClick={requestBestMove}>🧠 Best move</ToolbarBtn>
-          <ToolbarBtn onClick={() => onCancel?.()}>Cancel</ToolbarBtn>
-          <ToolbarBtn
-            onClick={() => onDone?.({ fen, pieces, side, castling, ep })}
-            disabled={!fenStatus.valid}
-            style={{ background:"#10b981", color:"#fff" }}
-          >
-            Done
-          </ToolbarBtn>
-        </div>
-      </div>
 
-      {/* Board + palettes */}
-      <div style={{ display: "grid", gridTemplateColumns: "64px minmax(420px, 640px) 64px", gap: 10 }}>
-        {/* left palette (white) */}
-        <PieceStrip
-          title="White"
-          items={WHITE}
-          onPick={(p) => { setDragPiece(p); setDragFrom("_PALETTE_"); }}
-          pieceSprite={pieceSprite}
-        />
-
-        {/* board */}
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 10,
-            overflow: "hidden",
-            aspectRatio: "1/1",
-            maxWidth: 640
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(8, 1fr)",
-              gridAutoRows: "1fr",
-              width: "100%",
-              height: "100%"
-            }}
-          >
-            {squaresRender.map((sq) => {
-              // color
-              const file = sq.charCodeAt(0) - 97;
-              const rankIdx = 8 - parseInt(sq[1],10);
-              const isLight = (file + rankIdx) % 2 === 0;
-              const bg = isLight ? "#f0d9b5" : "#b58863";
-              const piece = pieces[sq];
-
-              return (
-                <div
-                  key={sq}
-                  onDragOver={onDragOver}
-                  onDrop={(e)=>onDropSquare(e, sq)}
-                  onClick={(e)=>onSquareClick(sq, e)}
-                  onContextMenu={(e)=>onSquareClick(sq, e)}
-                  style={{ position:"relative", background:bg, userSelect:"none" }}
-                >
-                  {/* coordinate labels (outer corners only) */}
-                  {(sq[0]===(flipped?"h":"a") && sq[1]===(flipped?"1":"8")) && (
-                    <div style={{
-                      position:"absolute", top:2, left:4, fontSize:12, fontWeight:700,
-                      color: isLight ? "#b58863" : "#f0d9b5", textShadow:"0 1px 1px rgba(0,0,0,.3)"
-                    }}>
-                      {flipped ? "h8" : "a8"}
-                    </div>
-                  )}
-
-                  {/* piece */}
-                  {piece && (
-                    <img
-                      draggable
-                      onDragStart={(e)=>onDragStart(e, sq)}
-                      src={pieceSprite(piece)}
-                      alt={piece}
-                      style={{ width:"100%", height:"100%", objectFit:"contain", padding:"8%" }}
-                    />
-                  )}
-
-                  {/* if dragging from palette, click to place */}
-                  {!piece && dragPiece && dragFrom==="_PALETTE_" && (
-                    <button
-                      onClick={()=>placePiece(sq, dragPiece)}
-                      style={{
-                        position:"absolute", inset:0, opacity:0, cursor:"copy",
-                        border:"none", background:"transparent"
-                      }}
-                      title={`Place ${dragPiece} on ${sq}`}
-                    />
-                  )}
-                </div>
-              );
-            })}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <ToolbarBtn onClick={() => navigator.clipboard.writeText(fen)}>
+              📋 Copy FEN
+            </ToolbarBtn>
+            <ToolbarBtn onClick={requestBestMove}>
+              🧠 Best Move
+            </ToolbarBtn>
           </div>
         </div>
 
-        {/* right palette (black) */}
-        <PieceStrip
-          title="Black"
-          items={BLACK}
-          onPick={(p) => { setDragPiece(p); setDragFrom("_PALETTE_"); }}
-          pieceSprite={pieceSprite}
-        />
-      </div>
-
-      {/* turn + ep + FEN load */}
-      <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-        <div style={{ display:"inline-flex", gap:8, alignItems:"center", padding:"6px 10px", border:"1px solid #e5e7eb", borderRadius:8, background:"#fff" }}>
-          <span style={{ opacity:.75 }}>Select turn</span>
-          <label style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
-            <input type="radio" name="turn" checked={side==="w"} onChange={()=>setSide("w")} /> ♘ White
-          </label>
-          <label style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
-            <input type="radio" name="turn" checked={side==="b"} onChange={()=>setSide("b")} /> ♞ Black
-          </label>
-        </div>
-
-        <div style={{ display:"inline-flex", gap:8, alignItems:"center", padding:"6px 10px", border:"1px solid #e5e7eb", borderRadius:8, background:"#fff" }}>
-          <span style={{ opacity:.75 }}>EP</span>
-          <input
-            value={ep}
-            onChange={(e)=>setEp(e.target.value.trim())}
-            placeholder="e3 or empty"
-            style={{ width:80 }}
-          />
-        </div>
-
-        <div style={{ display:"grid", gap:6, flex:1, minWidth:280 }}>
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
           <div style={{
-            fontFamily:"ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-            padding:8, border:"1px solid #e5e7eb", borderRadius:8,
-            background: fenStatus.valid ? "rgba(16,185,129,.07)" : "rgba(239,68,68,.08)",
-            color: fenStatus.valid ? "#065f46" : "#7f1d1d"
+            marginBottom: 16,
+            padding: 12,
+            background: '#fef2f2',
+            border: '2px solid #ef4444',
+            borderRadius: 10,
+            color: '#991b1b'
+          }}>
+            <strong>⚠️ Position Issues:</strong>
+            <ul style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
+              {validationErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Board + Palettes - FIXED LAYOUT */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          gap: 24,
+          alignItems: 'flex-start',
+          marginBottom: 24
+        }}>
+          {/* White Palette */}
+          <div style={{ flexShrink: 0 }}>
+            <PieceStrip
+              title="White Pieces"
+              items={WHITE}
+              onDragStart={onDragStartFromPalette}
+              color="white"
+            />
+          </div>
+
+          {/* Board - FIXED SIZE */}
+          <div style={{
+            flexShrink: 0,
+            width: 560,
+            height: 560
+          }}>
+            <div
+              style={{
+                border: '4px solid #8b5cf6',
+                borderRadius: 12,
+                overflow: 'hidden',
+                boxShadow: '0 10px 40px rgba(139, 92, 246, 0.3)',
+                background: '#312e81',
+                padding: 12,
+                width: '100%',
+                height: '100%'
+              }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(8, 1fr)',
+                  gridTemplateRows: 'repeat(8, 1fr)',
+                  gap: 0,
+                  width: '100%',
+                  height: '100%',
+                  background: '#312e81'
+                }}
+              >
+                {squaresRender.map((sq) => {
+                  const file = sq.charCodeAt(0) - 97;
+                  const rankIdx = 8 - parseInt(sq[1],10);
+                  const isLight = (file + rankIdx) % 2 === 0;
+                  const bg = isLight ? '#f0d9b5' : '#b58863';
+                  const piece = pieces[sq];
+                  const isDragOver = dragOverSquare === sq;
+                  const isDragging = dragFrom === sq;
+
+                  return (
+                    <div
+                      key={sq}
+                      onDragOver={(e) => onDragOverSquare(e, sq)}
+                      onDragLeave={(e) => onDragLeaveSquare(e, sq)}
+                      onDrop={(e) => onDropSquare(e, sq)}
+                      onClick={(e) => onSquareClick(sq, e)}
+                      onContextMenu={(e) => onSquareClick(sq, e)}
+                      style={{
+                        position: 'relative',
+                        background: isDragOver
+                          ? (isLight ? '#c3e88d' : '#9ccc65')
+                          : bg,
+                        transition: 'all 0.2s ease',
+                        cursor: piece ? 'grab' : 'default',
+                        opacity: isDragging ? 0.4 : 1,
+                        boxShadow: isDragOver ? 'inset 0 0 0 3px #10b981' : 'none'
+                      }}
+                    >
+                      {/* Coordinates */}
+                      {sq[0] === 'a' && (
+                        <div style={{
+                          position: 'absolute',
+                          left: 4,
+                          top: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: isLight ? '#b58863' : '#f0d9b5',
+                          opacity: 0.7,
+                          userSelect: 'none'
+                        }}>
+                          {sq[1]}
+                        </div>
+                      )}
+                      {sq[1] === '1' && (
+                        <div style={{
+                          position: 'absolute',
+                          right: 4,
+                          bottom: 4,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: isLight ? '#b58863' : '#f0d9b5',
+                          opacity: 0.7,
+                          userSelect: 'none'
+                        }}>
+                          {sq[0]}
+                        </div>
+                      )}
+
+                      {/* Piece - Using Lichess SVG */}
+                      {piece && (
+                        <img
+                          draggable
+                          onDragStart={(e) => onDragStartFromSquare(e, sq)}
+                          onDragEnd={onDragEnd}
+                          src={getPieceImageUrl(piece)}
+                          alt={piece}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            padding: '8%',
+                            cursor: 'grab',
+                            transition: 'transform 0.15s ease',
+                            transform: isDragging ? 'scale(0.8)' : 'scale(1)',
+                            userSelect: 'none'
+                          }}
+                          onMouseEnter={(e) => !isDragging && (e.currentTarget.style.transform = 'scale(1.15)')}
+                          onMouseLeave={(e) => !isDragging && (e.currentTarget.style.transform = 'scale(1)')}
+                        />
+                      )}
+
+                      {/* Drop indicator */}
+                      {isDragOver && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'grid',
+                          placeItems: 'center',
+                          pointerEvents: 'none'
+                        }}>
+                          <div style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: '50%',
+                            background: 'rgba(16, 185, 129, 0.3)',
+                            border: '3px solid #10b981'
+                          }}/>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Black Palette */}
+          <div style={{ flexShrink: 0 }}>
+            <PieceStrip
+              title="Black Pieces"
+              items={BLACK}
+              onDragStart={onDragStartFromPalette}
+              color="black"
+            />
+          </div>
+        </div>
+
+        {/* Bottom Controls */}
+        <div style={{
+          display: 'grid',
+          gap: 16,
+          padding: 16,
+          background: '#f9fafb',
+          borderRadius: 12
+        }}>
+          {/* Turn and EP */}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              alignItems: 'center',
+              padding: '10px 16px',
+              background: 'white',
+              borderRadius: 10,
+              border: '2px solid #e5e7eb'
+            }}>
+              <span style={{ fontWeight: 600, color: '#6b7280' }}>Turn:</span>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="turn"
+                  checked={side==="w"}
+                  onChange={()=>setSide("w")}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>♔ White</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="turn"
+                  checked={side==="b"}
+                  onChange={()=>setSide("b")}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span>♚ Black</span>
+              </label>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              padding: '10px 16px',
+              background: 'white',
+              borderRadius: 10,
+              border: '2px solid #e5e7eb'
+            }}>
+              <span style={{ fontWeight: 600, color: '#6b7280' }}>En Passant:</span>
+              <input
+                value={ep}
+                onChange={(e)=>setEp(e.target.value.trim())}
+                placeholder="e.g. e3"
+                style={{
+                  width: 80,
+                  padding: '6px 10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6
+                }}
+              />
+            </div>
+          </div>
+
+          {/* FEN Display */}
+          <div style={{
+            fontFamily: 'ui-monospace, monospace',
+            padding: 12,
+            background: (fenStatus.valid && validationErrors.length === 0)
+              ? 'rgba(16, 185, 129, 0.1)'
+              : 'rgba(239, 68, 68, 0.1)',
+            border: `2px solid ${(fenStatus.valid && validationErrors.length === 0) ? '#10b981' : '#ef4444'}`,
+            borderRadius: 10,
+            color: (fenStatus.valid && validationErrors.length === 0) ? '#065f46' : '#991b1b',
+            fontSize: 13,
+            wordBreak: 'break-all'
           }}>
             {fen}
           </div>
-          <div style={{ display:"flex", gap:6 }}>
+
+          {/* FEN Load */}
+          <div style={{ display: 'flex', gap: 8 }}>
             <input
               value={fenInput}
               onChange={(e)=>setFenInput(e.target.value)}
-              placeholder="Paste FEN to load..."
-              style={{ flex:1 }}
+              placeholder="Paste FEN string to load position..."
+              style={{
+                flex: 1,
+                padding: '10px 14px',
+                border: '2px solid #e5e7eb',
+                borderRadius: 10,
+                fontSize: 14
+              }}
             />
-            <ToolbarBtn onClick={loadFen}>Load FEN</ToolbarBtn>
+            <ToolbarBtn onClick={loadFen} style={{ minWidth: 100 }}>
+              Load FEN
+            </ToolbarBtn>
           </div>
+        </div>
+
+        {/* Help Text */}
+        <div style={{
+          marginTop: 16,
+          padding: 12,
+          background: '#eff6ff',
+          borderRadius: 8,
+          fontSize: 13,
+          color: '#1e40af'
+        }}>
+          <strong>💡 Tips:</strong> Drag pieces from palettes to board • Drag between squares to move •
+          Right-click to remove • Shift+drag to copy • Position rules enforced (1 king per color, max 8 pawns, etc.)
         </div>
       </div>
     </div>
   );
 }
 
-// --- small presentational helpers ---
 function ToolbarBtn({ children, disabled, onClick, style }) {
   return (
     <button
       disabled={disabled}
       onClick={onClick}
       style={{
-        padding:"8px 12px",
-        border:"1px solid #e5e7eb",
-        borderRadius:8,
-        background:"#f8fafc",
-        cursor: disabled ? "not-allowed" : "pointer",
+        padding: '10px 16px',
+        border: 'none',
+        borderRadius: 10,
+        background: '#f3f4f6',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontWeight: 500,
+        fontSize: 14,
+        transition: 'all 0.2s ease',
+        boxShadow: disabled ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
+        opacity: disabled ? 0.5 : 1,
         ...style
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+        }
       }}
     >
       {children}
@@ -409,26 +771,63 @@ function ToolbarBtn({ children, disabled, onClick, style }) {
   );
 }
 
-function PieceStrip({ title, items, onPick, pieceSprite }) {
+function PieceStrip({ title, items, onDragStart, color }) {
   return (
-    <div style={{ display:"grid", gridTemplateRows:"repeat(8, 1fr)", gap:8, alignContent:"start" }}>
-      {items.map((p, i) => (
-        <button
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8
+    }}>
+      <div style={{
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#6b7280',
+        textAlign: 'center',
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      }}>
+        {title}
+      </div>
+      {items.map((p) => (
+        <div
           key={p}
-          title={`${title} ${p.toUpperCase()}`}
-          onClick={() => onPick(p)}
           draggable
-          onDragStart={(e) => {
-            const img = new Image(); img.src = pieceSprite(p);
-            e.dataTransfer.setDragImage(img, 24, 24);
-          }}
+          onDragStart={(e) => onDragStart(e, p)}
           style={{
-            width:56, height:56, border:"1px solid #e5e7eb", borderRadius:10,
-            background:"#fff", display:"grid", placeItems:"center"
+            width: 64,
+            height: 64,
+            border: '2px solid #e5e7eb',
+            borderRadius: 12,
+            background: 'white',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'grab',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 4px 16px rgba(139, 92, 246, 0.3)';
+            e.currentTarget.style.borderColor = '#8b5cf6';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+            e.currentTarget.style.borderColor = '#e5e7eb';
           }}
         >
-          <img alt={p} src={pieceSprite(p)} style={{ width:40, height:40 }} />
-        </button>
+          <img
+            alt={p}
+            src={getPieceImageUrl(p)}
+            style={{
+              width: 52,
+              height: 52,
+              pointerEvents: 'none',
+              userSelect: 'none'
+            }}
+          />
+        </div>
       ))}
     </div>
   );
