@@ -4,6 +4,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Body
 from typing import Optional
 from PIL import Image
 import io, base64, traceback
+from typing import List
 
 from app.models.chess_models import (
     VisionResponse,
@@ -151,10 +152,96 @@ async def generate_fen_from_pieces(request: ManualFENRequest = Body(...)):
                 fen_row += str(empty)
             fen_rows.append(fen_row)
 
-        fen = '/'.join(fen_rows) + ' w KQkq - 0 1'
+        # Infer castling rights from piece positions (conservative)
+        def infer_castling_rights(board):
+            """
+            Returns castling rights string based on piece positions.
+            Only grants castling if king and rooks are on their starting squares.
+            """
+            rights = []
+
+            # Helper: get piece at file (0=a..7=h), rank (0=8th..7=1st)
+            def at(file, rank):
+                return board[rank * 8 + file]
+
+            # White
+            wk = at(4, 7) == 'K'  # e1
+            wra = at(0, 7) == 'R'  # a1
+            wrh = at(7, 7) == 'R'  # h1
+            if wk and wrh:
+                rights.append('K')
+            if wk and wra:
+                rights.append('Q')
+
+            # Black
+            bk = at(4, 0) == 'k'  # e8
+            bra = at(0, 0) == 'r'  # a8
+            brh = at(7, 0) == 'r'  # h8
+            if bk and brh:
+                rights.append('k')
+            if bk and bra:
+                rights.append('q')
+
+            return ''.join(rights) if rights else '-'
+
+        castling = infer_castling_rights(board)
+        fen = '/'.join(fen_rows) + f' w {castling} - 0 1'
         return VisionResponse(fen=fen, confidence=1.0, detectedPieces=[])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"FEN generation failed: {str(e)}")
+    
+
+
+
+
+@router.post("/extract-grid")
+async def extract_grid(image: UploadFile = File(...)):
+    """
+    Detect the board, warp to a square, and return:
+      - warped board as base64 PNG
+      - initial horizontal/vertical guide positions (9 each, px)
+    The UI can let users adjust these guides before slicing 64 squares.
+    """
+    try:
+        from app.services.board_detector import extract_and_transform_board
+
+        contents = await image.read()
+        img = Image.open(io.BytesIO(contents))
+
+        warped = extract_and_transform_board(img)
+        if warped is None:
+            return {
+                "boardDetected": False,
+                "message": "Could not detect chessboard",
+                "warpedBoard": None,
+                "hSegments": [],
+                "vSegments": []
+            }
+
+        size = warped.size[0]  # square
+        # equal segments from 0..size
+        def segments(n=8):
+            return [int(i * (size / n)) for i in range(n + 1)]
+
+        h_segments = segments(8)
+        v_segments = segments(8)
+
+        # encode warped image
+        buf = io.BytesIO()
+        warped.save(buf, format="PNG")
+        warped_b64 = base64.b64encode(buf.getvalue()).decode()
+
+        return {
+            "boardDetected": True,
+            "message": "Board warped successfully",
+            "warpedBoard": warped_b64,
+            "hSegments": h_segments,
+            "vSegments": v_segments,
+            "size": size
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"extract-grid failed: {e}")
+
 
 
 @router.get("/health")

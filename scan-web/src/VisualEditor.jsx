@@ -914,71 +914,155 @@ function validateFen(fen) {
 }
 
 // Build FEN from a board map + UI state
+// function buildFen({ pieces, squares, sideToMove, castling, epSquare }) {
+//   const board = Array(64).fill('.')
+//   for (const [pos, piece] of Object.entries(pieces)) {
+//     const sq = squares.find((s) => s.position === pos)
+//     if (sq) board[sq.index] = piece
+//   }
+
+
+
+
+//   // ranks a8..h1
+//   const rows = []
+//   for (let r = 0; r < 8; r++) {
+//     let row = ''
+//     let empty = 0
+//     for (let c = 0; c < 8; c++) {
+//       const v = board[r * 8 + c]
+//       if (v === '.') empty++
+//       else {
+//         if (empty) { row += empty; empty = 0 }
+//         row += v
+//       }
+//     }
+//     if (empty) row += empty
+//     rows.push(row)
+//   }
+
+//   // const castlingStr =
+//   //   (castling.K ? 'K' : '') +
+//   //   (castling.Q ? 'Q' : '') +
+//   //   (castling.k ? 'k' : '') +
+//   //   (castling.q ? 'q' : '')
+//   // const cs = castlingStr.length ? castlingStr : '-'
+
+//   // Auto-infer if user didn’t toggle checkboxes
+//   let cs = (castling && Object.values(castling).some(Boolean))
+//   ? ((castling.K ? 'K' : '') + (castling.Q ? 'Q' : '') + (castling.k ? 'k' : '') + (castling.q ? 'q' : ''))
+//   : inferCastlingRights(board);
+
+//   const ep = epSquare || '-'
+//   return `${rows.join('/')} ${sideToMove} ${cs} ${ep} 0 1`
+// }
+
+
+// Build FEN from a board map + UI state (auto-castling)
 function buildFen({ pieces, squares, sideToMove, castling, epSquare }) {
-  const board = Array(64).fill('.')
+  // 1) Build a8..h1 board array (64 entries of '.' or piece letter)
+  const board = Array(64).fill('.');
   for (const [pos, piece] of Object.entries(pieces)) {
-    const sq = squares.find((s) => s.position === pos)
-    if (sq) board[sq.index] = piece
+    const sq = squares.find((s) => s.position === pos);
+    if (sq) board[sq.index] = piece;
   }
 
-
-
-
-  // ranks a8..h1
-  const rows = []
+  // 2) Make ranks a8..h1
+  const rows = [];
   for (let r = 0; r < 8; r++) {
-    let row = ''
-    let empty = 0
+    let row = '';
+    let empty = 0;
     for (let c = 0; c < 8; c++) {
-      const v = board[r * 8 + c]
-      if (v === '.') empty++
+      const v = board[r * 8 + c];
+      if (v === '.') empty++;
       else {
-        if (empty) { row += empty; empty = 0 }
-        row += v
+        if (empty) { row += empty; empty = 0; }
+        row += v;
       }
     }
-    if (empty) row += empty
-    rows.push(row)
+    if (empty) row += empty;
+    rows.push(row);
   }
 
-  // const castlingStr =
-  //   (castling.K ? 'K' : '') +
-  //   (castling.Q ? 'Q' : '') +
-  //   (castling.k ? 'k' : '') +
-  //   (castling.q ? 'q' : '')
-  // const cs = castlingStr.length ? castlingStr : '-'
+  // 3) Castling: sanitize user choice OR infer if nothing ticked
+  const cs = sanitizeOrInferCastling(board, castling);
 
-  // Auto-infer if user didn’t toggle checkboxes
-  let cs = (castling && Object.values(castling).some(Boolean))
-  ? ((castling.K ? 'K' : '') + (castling.Q ? 'Q' : '') + (castling.k ? 'k' : '') + (castling.q ? 'q' : ''))
-  : inferCastlingRights(board);
+  // 4) En-passant square: keep simple (blank → '-')
+  const ep = (epSquare && /^[a-h][36]$/.test(epSquare)) ? epSquare : '-';
 
-  const ep = epSquare || '-'
-  return `${rows.join('/')} ${sideToMove} ${cs} ${ep} 0 1`
+  // 5) Assemble FEN
+  return `${rows.join('/')} ${sideToMove} ${cs} ${ep} 0 1`;
 }
 
+/* ===== Helpers (paste these just below buildFen) ===== */
 
+// If user toggled any castling flags, keep only those that are legal on the board.
+// If nothing is toggled, infer all legal flags.
+function sanitizeOrInferCastling(board64, castlingFlags) {
+  const legal = inferCastlingRights(board64); // e.g. "KQ", "K", "-", etc.
 
-function inferCastlingRights(board64 /* length 64, a8..h1 with '.' or piece */) {
+  // If no checkboxes ticked, use full legal
+  const anyTicked = castlingFlags && Object.values(castlingFlags).some(Boolean);
+  if (!anyTicked) return legal;
+
+  // Otherwise intersect (drop impossible flags)
+  const chosen = [
+    castlingFlags.K ? 'K' : '',
+    castlingFlags.Q ? 'Q' : '',
+    castlingFlags.k ? 'k' : '',
+    castlingFlags.q ? 'q' : '',
+  ].join('');
+
+  if (legal === '-') return '-';
+  const filtered = chosen.split('').filter(ch => legal.includes(ch)).join('');
+  return filtered.length ? filtered : '-';
+}
+
+// Legal by placement only (what FEN validators like chess.js/chess.com require)
+// Requires kings on e1/e8 and rooks on a1/h1/a8/h8.
+function inferCastlingRights(board64 /* a8..h1 */) {
   const at = (file, rank) => board64[rank * 8 + file]; // file 0=a..7=h, rank 0=8th..7=1st
   const rights = [];
 
   // White
-  const wk = at(4, 7) === 'K';     // e1
-  const wra = at(0, 7) === 'R';    // a1
-  const wrh = at(7, 7) === 'R';    // h1
+  const wk  = at(4, 7) === 'K'; // e1
+  const wra = at(0, 7) === 'R'; // a1
+  const wrh = at(7, 7) === 'R'; // h1
   if (wk && wrh) rights.push('K');
   if (wk && wra) rights.push('Q');
 
   // Black
-  const bk = at(4, 0) === 'k';     // e8
-  const bra = at(0, 0) === 'r';    // a8
-  const brh = at(7, 0) === 'r';    // h8
+  const bk  = at(4, 0) === 'k'; // e8
+  const bra = at(0, 0) === 'r'; // a8
+  const brh = at(7, 0) === 'r'; // h8
   if (bk && brh) rights.push('k');
   if (bk && bra) rights.push('q');
 
   return rights.length ? rights.join('') : '-';
 }
+
+
+
+// function inferCastlingRights(board64 /* length 64, a8..h1 with '.' or piece */) {
+//   const at = (file, rank) => board64[rank * 8 + file]; // file 0=a..7=h, rank 0=8th..7=1st
+//   const rights = [];
+
+//   // White
+//   const wk = at(4, 7) === 'K';     // e1
+//   const wra = at(0, 7) === 'R';    // a1
+//   const wrh = at(7, 7) === 'R';    // h1
+//   if (wk && wrh) rights.push('K');
+//   if (wk && wra) rights.push('Q');
+
+//   // Black
+//   const bk = at(4, 0) === 'k';     // e8
+//   const bra = at(0, 0) === 'r';    // a8
+//   const brh = at(7, 0) === 'r';    // h8
+//   if (bk && brh) rights.push('k');
+//   if (bk && bra) rights.push('q');
+
+//   return rights.length ? rights.join('') : '-';
+// }
 
 // Fill standard chess starting position
 function makeStartingPieces() {
