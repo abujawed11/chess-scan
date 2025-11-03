@@ -2,10 +2,12 @@
 
 // scan-web/src/App.jsx
 import { useState } from 'react'
+import Home from './components/pages/Home'
+import GamePlay from './components/pages/GamePlay'
 import VisualEditor from './VisualEditor'
 import GridAdjuster from './GridAdjuster'     // shows/edits grid lines, returns 64 crops
 import BoardEditor from './BoardEditor'       // full final editor (flip, rotate, castling, etc.)
-import GamePlay from './GamePlay'             // chess gameplay with Stockfish integration
+import { API_ENDPOINTS } from './utils/constants'
 
 function App() {
   const [selectedImage, setSelectedImage] = useState(null)
@@ -14,7 +16,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // flow control: 'home' | 'adjust' | 'editor' | 'board' | 'play'
+  // flow control: 'home' | 'scan' | 'adjust' | 'editor' | 'board' | 'play' | 'analyze'
   const [mode, setMode] = useState('home')
 
   // extracted squares and grid adjuster state
@@ -29,6 +31,32 @@ function App() {
   // game fen for GamePlay component
   const [gameFen, setGameFen] = useState(null)
 
+  // Handle mode selection from Home page
+  const handleModeSelect = (selectedMode, options = {}) => {
+    switch (selectedMode) {
+      case 'play':
+        // Start a new game or load from FEN
+        if (options.fen) {
+          setGameFen(options.fen)
+        } else {
+          setGameFen(null) // Fresh game
+        }
+        setMode('play')
+        break
+      case 'analyze':
+        // Start analysis mode
+        setGameFen(null)
+        setMode('play') // GamePlay component handles analyze mode
+        break
+      case 'scan':
+        // Enter scan mode
+        setMode('scan')
+        break
+      default:
+        setMode('home')
+    }
+  }
+
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -36,7 +64,6 @@ function App() {
     setPreview(URL.createObjectURL(file))
     setError(null)
     setResult(null)
-    setMode('home')
     setExtractedSquares(null)
 
     // also store base64 for GridAdjuster (fallback/preview)
@@ -54,7 +81,7 @@ function App() {
 
     try {
       // detect + warp + send guides so user can verify/adjust
-      const res = await fetch('http://localhost:3000/api/vision/extract-grid', {
+      const res = await fetch(API_ENDPOINTS.EXTRACT_GRID, {
         method: 'POST',
         body: form,
       })
@@ -80,6 +107,7 @@ function App() {
     const ok = Array.isArray(squares) && squares.length === 64 && squares.every(s => s?.imageData)
     if (!ok) {
       setError('Adjusted extraction returned invalid squares. Please re-align the guides closer to the inner grid.')
+      setMode('scan')
       return
     }
     setExtractedSquares(squares)
@@ -100,13 +128,33 @@ function App() {
       setGameFen(finalData.fen)
       setMode('play')
     } else {
-      // Regular save - go back to home with result
+      // Regular save - go back to scan view with result
       setResult({ fen: finalData.fen, confidence: 1 })
-      setMode('home')
+      setMode('scan')
     }
   }
 
   // ---------- Screens ----------
+
+  // Home page
+  if (mode === 'home') {
+    return <Home onModeSelect={handleModeSelect} />
+  }
+
+  // Play/Analyze mode
+  if (mode === 'play') {
+    return (
+      <GamePlay
+        initialFen={gameFen}
+        onBack={() => {
+          setMode('home')
+          setGameFen(null)
+        }}
+      />
+    )
+  }
+
+  // Scan flow screens
   if (mode === 'adjust' && (warpedBoard || originalImageDataUrl)) {
     return (
       <GridAdjuster
@@ -114,7 +162,7 @@ function App() {
         originalImage={originalImageDataUrl}
         initH={gridSegments.h}
         initV={gridSegments.v}
-        onCancel={() => setMode('home')}
+        onCancel={() => setMode('scan')}
         onDone={handleAdjustDone}
       />
     )
@@ -125,7 +173,7 @@ function App() {
       <VisualEditor
         squares={extractedSquares}
         onComplete={handleEditorComplete}
-        onCancel={() => setMode('home')}
+        onCancel={() => setMode('scan')}
       />
     )
   }
@@ -134,38 +182,38 @@ function App() {
     return (
       <BoardEditor
         initialFen={boardFen}
-        onCancel={() => setMode('home')}
+        onCancel={() => setMode('scan')}
         onDone={handleBoardDone}
       />
     )
   }
 
-  if (mode === 'play' && gameFen) {
-    return (
-      <GamePlay
-        initialFen={gameFen}
-        onBack={() => {
-          setMode('board')
-        }}
-      />
-    )
-  }
-
-  // ---------- Home ----------
+  // ---------- Scan Mode ----------
   return (
     <div style={{ padding: '40px', maxWidth: 820, margin: '0 auto', fontFamily: 'system-ui, sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>♟️ Chess Position Scanner</h1>
-        <button
-          onClick={() => result && navigator.clipboard.writeText(result.fen)}
-          disabled={!result}
-          style={{
-            padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6,
-            background: '#fff', cursor: result ? 'pointer' : 'not-allowed'
-          }}
-        >
-          Copy FEN
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={() => setMode('home')}
+            style={{
+              padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6,
+              background: '#fff', cursor: 'pointer', fontWeight: 500
+            }}
+          >
+            ← Back to Home
+          </button>
+          <button
+            onClick={() => result && navigator.clipboard.writeText(result.fen)}
+            disabled={!result}
+            style={{
+              padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6,
+              background: '#fff', cursor: result ? 'pointer' : 'not-allowed'
+            }}
+          >
+            Copy FEN
+          </button>
+        </div>
       </div>
 
       {/* uploader */}

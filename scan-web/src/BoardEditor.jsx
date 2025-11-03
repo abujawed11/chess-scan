@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js/dist/esm/chess.js";
+import { getPieceImageUrl } from "./utils/chessUtils";
+import { FILES, RANKS } from "./utils/constants";
 
 // --- piece palette ---
 const WHITE = ["K", "Q", "R", "B", "N", "P"];
 const BLACK = ["k", "q", "r", "b", "n", "p"];
-
-const FILES = ["a","b","c","d","e","f","g","h"];
-const RANKS = [8,7,6,5,4,3,2,1];
-
-// Chess piece images from Lichess (high quality SVG)
-function getPieceImageUrl(piece) {
-  const pieceMap = {
-    'K': 'wK', 'Q': 'wQ', 'R': 'wR', 'B': 'wB', 'N': 'wN', 'P': 'wP',
-    'k': 'bK', 'q': 'bQ', 'r': 'bR', 'b': 'bB', 'n': 'bN', 'p': 'bP'
-  };
-  const pieceName = pieceMap[piece];
-  return `https://lichess1.org/assets/piece/cburnett/${pieceName}.svg`;
-}
 
 // ---------- helpers: fen <-> board map ----------
 function buildFen({ pieces, side, castling, ep }) {
