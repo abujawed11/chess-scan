@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useChessGame } from "../../hooks/useChessGame";
 import { useStockfish } from "../../hooks/useStockfish";
 import ChessBoard from "../chess/ChessBoard";
@@ -13,6 +13,7 @@ export default function GamePlay({ initialFen, onBack }) {
   const [gameMode, setGameMode] = useState(null);
   const [playerColor, setPlayerColor] = useState('white');
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
+  const lastAnalyzedFenRef = useRef(null);
 
   // Use custom hooks
   const {
@@ -40,13 +41,21 @@ export default function GamePlay({ initialFen, onBack }) {
     clearError,
   } = useStockfish();
 
-  // Auto-trigger analysis when analysisEnabled becomes true
+  // Auto-trigger analysis when position changes (only in analyze mode)
   useEffect(() => {
-    if (analysisEnabled && !thinking) {
-      console.log('🔄 Analysis enabled, triggering analysis...');
+    const currentFen = boardFen;
+
+    // Only analyze if:
+    // 1. Analysis is enabled
+    // 2. Not currently thinking
+    // 3. Game is not over
+    // 4. Position has actually changed (prevent duplicate analysis)
+    if (analysisEnabled && !thinking && !gameOver && currentFen !== lastAnalyzedFenRef.current) {
+      console.log('🔄 Position changed, triggering analysis for:', currentFen);
+      lastAnalyzedFenRef.current = currentFen;
       requestAnalysis(game.fen());
     }
-  }, [analysisEnabled, thinking, game, requestAnalysis]);
+  }, [analysisEnabled, boardFen, gameOver, thinking, requestAnalysis, game]);
 
   // Make computer move
   const makeComputerMove = useCallback(() => {

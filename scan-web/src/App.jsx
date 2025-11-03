@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import Home from './components/pages/Home'
 import GamePlay from './components/pages/GamePlay'
+import GameReview from './components/pages/GameReview'
 import VisualEditor from './VisualEditor'
 import GridAdjuster from './GridAdjuster'     // shows/edits grid lines, returns 64 crops
 import BoardEditor from './BoardEditor'       // full final editor (flip, rotate, castling, etc.)
@@ -52,6 +53,10 @@ function App() {
       case 'scan':
         // Enter scan mode
         setMode('scan')
+        break
+      case 'review':
+        // Enter PGN review mode
+        setMode('review')
         break
       default:
         setMode('home')
@@ -158,6 +163,20 @@ function App() {
             setMode('home')
             setGameFen(null)
           }}
+        />
+      </ErrorBoundary>
+    )
+  }
+
+  // PGN Review mode
+  if (mode === 'review') {
+    return (
+      <ErrorBoundary
+        errorType="PGN Review Error"
+        onReset={() => setMode('home')}
+      >
+        <GameReview
+          onBack={() => setMode('home')}
         />
       </ErrorBoundary>
     )

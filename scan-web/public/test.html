@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+const sf = new Worker('/stockfish-17.1-lite-single-03e3232.js');
+sf.onmessage = e => console.log('SF:', e.data);
+sf.postMessage('uci');
+sf.postMessage('isready');
+setTimeout(() => {
+  sf.postMessage('ucinewgame');
+  sf.postMessage('position startpos');
+  sf.postMessage('go movetime 1000');
+}, 1000);
+</script>
+</body>
+</html>

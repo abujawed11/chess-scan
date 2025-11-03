@@ -1,6 +1,6 @@
 // src/utils/stockfishClient.js
 export class StockfishClient {
-  constructor(path = '/stockfish.js') {
+  constructor(path = '/stockfish-17.1-lite-single-03e3232.js') {
     this.worker = null;
     this._listeners = new Set();
     this._errorListeners = new Set();
@@ -13,6 +13,8 @@ export class StockfishClient {
       this.worker = new Worker(path);
       this._setupWorkerHandlers();
       this._startInitTimeout();
+      // Send UCI command after handlers are set up to avoid race condition
+      this.worker.postMessage('uci');
     } catch (error) {
       console.error('Failed to initialize Stockfish worker:', error);
       this._handleError('Failed to load Stockfish engine. Please check your internet connection and refresh the page.', error);
@@ -27,12 +29,13 @@ export class StockfishClient {
       // Forward every line to listeners
       for (const fn of this._listeners) fn(msg);
 
-      // Basic UCI boot sequence
-      if (msg.includes('Stockfish')) {
-        this.worker.postMessage('uci');
-      } else if (msg.includes('uciok')) {
+      // Handle UCI handshake responses
+      // Note: We already sent 'uci' in constructor, so we don't wait for a banner
+      if (msg.includes('uciok')) {
+        // Engine acknowledged UCI mode, now check if ready
         this.worker.postMessage('isready');
       } else if (msg.includes('readyok')) {
+        // Engine is ready for commands
         this._ready = true;
         this._clearInitTimeout();
         if (this._resolver) {

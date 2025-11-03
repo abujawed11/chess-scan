@@ -9,6 +9,9 @@ export function useStockfish() {
   const [engineError, setEngineError] = useState(null);
   const engineRef = useRef(null);
   const engineReadyRef = useRef(false);
+  const analysisInProgressRef = useRef(false);
+  const pendingAnalysisRef = useRef(null); // Store pending FEN to analyze after current one
+  const analysisTimeoutRef = useRef(null);
 
   // Initialize Stockfish engine
   useEffect(() => {
@@ -17,6 +20,8 @@ export function useStockfish() {
 
     // Listen to all engine lines and parse what we need
     const off = engine.onMessage((msg) => {
+      console.log('🔧 Engine:', msg); // Debug all messages
+
       // Mark ready
       if (msg.includes('readyok')) engineReadyRef.current = true;
 
@@ -24,8 +29,50 @@ export function useStockfish() {
       if (msg.includes('bestmove')) {
         const m = msg.match(/bestmove ([a-h][1-8][a-h][1-8][qrbn]?)/);
         if (m) {
+          console.log('✅ Got bestmove:', m[1]);
+
+          // Clear the safety timeout
+          if (analysisTimeoutRef.current) {
+            clearTimeout(analysisTimeoutRef.current);
+            analysisTimeoutRef.current = null;
+          }
+
           setBestMove(m[1]);
           setThinking(false);
+          analysisInProgressRef.current = false;
+
+          // Process pending analysis if there is one
+          if (pendingAnalysisRef.current) {
+            const pendingFen = pendingAnalysisRef.current;
+            pendingAnalysisRef.current = null;
+            console.log('📋 Processing pending analysis for:', pendingFen);
+
+            // Delay to let engine settle, then analyze pending position
+            setTimeout(() => {
+              if (engineRef.current && !engineRef.current.hasCrashed()) {
+                console.log('🎯 Starting queued analysis');
+                analysisInProgressRef.current = true;
+                setThinking(true);
+
+                // Set new timeout for queued analysis
+                analysisTimeoutRef.current = setTimeout(() => {
+                  if (analysisInProgressRef.current) {
+                    console.warn('⚠️ Queued analysis timeout');
+                    engineRef.current?.stop();
+                    setThinking(false);
+                    analysisInProgressRef.current = false;
+                  }
+                }, 5000);
+
+                setTimeout(() => {
+                  engineRef.current.positionFen(pendingFen);
+                  setTimeout(() => {
+                    engineRef.current.goMovetime(1000);
+                  }, 50);
+                }, 200);
+              }
+            }, 100);
+          }
         }
       }
 
@@ -43,8 +90,15 @@ export function useStockfish() {
       setThinking(false);
     });
 
-    // Ensure UCI boot
+    // Ensure UCI boot - wait for engine to be fully ready
     engine.waitReady()
+      .then(() => {
+        console.log('✅ Stockfish engine initialized and ready');
+        // Send ucinewgame ONCE at initialization
+        engine.ucinewgame();
+        // Add a small delay to ensure WASM is fully initialized
+        return new Promise(resolve => setTimeout(resolve, 100));
+      })
       .then(() => {
         engineReadyRef.current = true;
       })
@@ -56,6 +110,10 @@ export function useStockfish() {
     return () => {
       off();
       offError();
+      if (analysisTimeoutRef.current) {
+        clearTimeout(analysisTimeoutRef.current);
+      }
+      pendingAnalysisRef.current = null;
       engineRef.current?.terminate();
       engineRef.current = null;
       engineReadyRef.current = false;
@@ -63,7 +121,7 @@ export function useStockfish() {
   }, []);
 
   // Request analysis from Stockfish
-  const requestAnalysis = useCallback((fen, depth = STOCKFISH_CONFIG.DEFAULT_DEPTH) => {
+  const requestAnalysis = useCallback((fen, depth = 10) => { // Use depth 10 for Lite build
     const engine = engineRef.current;
     if (!engine) {
       console.log('❌ Engine not available');
@@ -92,19 +150,71 @@ export function useStockfish() {
       return;
     }
 
+    // If analysis is in progress, queue this request instead of interrupting
+    if (analysisInProgressRef.current) {
+      console.log('⏸️ Analysis in progress, queuing new position:', fen);
+      pendingAnalysisRef.current = fen; // Only keep the LATEST position
+      return;
+    }
+
     try {
       console.log('🎯 Starting analysis for position:', fen);
+      console.log('📊 Using depth:', depth);
       setThinking(true);
-      setEngineError(null); // Clear any previous errors
+      setEngineError(null);
+      analysisInProgressRef.current = true;
+
+      // Clear any existing timeout
+      if (analysisTimeoutRef.current) {
+        clearTimeout(analysisTimeoutRef.current);
+      }
+
+      // Safety timeout: if no bestmove after 5 seconds, force stop
+      analysisTimeoutRef.current = setTimeout(() => {
+        if (analysisInProgressRef.current) {
+          console.warn('⚠️ Analysis timeout - forcing stop');
+          engine.stop();
+          setThinking(false);
+          analysisInProgressRef.current = false;
+
+          // Process pending if exists
+          if (pendingAnalysisRef.current) {
+            const pending = pendingAnalysisRef.current;
+            pendingAnalysisRef.current = null;
+            setTimeout(() => requestAnalysis(pending), 100);
+          }
+        }
+      }, 5000); // 5 second timeout
+
+      // Stop any ongoing analysis
       engine.stop();
-      engine.ucinewgame();
-      engine.setOption('MultiPV', STOCKFISH_CONFIG.MULTI_PV);
-      engine.positionFen(fen);
-      engine.goDepth(depth);
+
+      // Wait longer for stop to complete before sending new commands
+      setTimeout(() => {
+        if (engine.hasCrashed && engine.hasCrashed()) {
+          setEngineError('Chess engine has crashed. Please refresh the page.');
+          setThinking(false);
+          analysisInProgressRef.current = false;
+          if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
+          return;
+        }
+
+        console.log('📤 Sending position:', fen);
+        engine.positionFen(fen);
+
+        // Small delay between position and go to let engine process
+        setTimeout(() => {
+          // Use movetime instead of depth for more reliable analysis with Lite build
+          console.log('📤 Sending go movetime 1000');
+          engine.goMovetime(1000); // Analyze for 1 second instead of fixed depth
+        }, 50);
+      }, 300); // Increased delay from 200 to 300
     } catch (error) {
       console.error('Error during analysis:', error);
       setEngineError('Failed to start analysis. Please try again.');
       setThinking(false);
+      analysisInProgressRef.current = false;
+      if (analysisTimeoutRef.current) clearTimeout(analysisTimeoutRef.current);
     }
   }, []);
 
@@ -118,6 +228,12 @@ export function useStockfish() {
       engine.stop();
       setThinking(false);
       setBestMove(null);
+      analysisInProgressRef.current = false;
+      pendingAnalysisRef.current = null; // Clear pending
+      if (analysisTimeoutRef.current) {
+        clearTimeout(analysisTimeoutRef.current);
+        analysisTimeoutRef.current = null;
+      }
     } catch (error) {
       console.error('Error stopping analysis:', error);
       setEngineError('Failed to stop analysis.');

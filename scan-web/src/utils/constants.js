@@ -17,8 +17,13 @@ export const GAME_MODES = {
 };
 
 // Default Stockfish settings
+// export const STOCKFISH_CONFIG = {
+//   WORKER_PATH: '/stockfish.js',
+//   DEFAULT_DEPTH: 18,
+//   MULTI_PV: 1,
+// };
 export const STOCKFISH_CONFIG = {
-  WORKER_PATH: '/stockfish.js',
+  WORKER_PATH: '/stockfish-17.1-lite-single-03e3232.js', // exact filename you downloaded
   DEFAULT_DEPTH: 18,
   MULTI_PV: 1,
 };

@@ -82,6 +82,13 @@ export default function Home({ onModeSelect }) {
           />
 
           <ModeCard
+            icon="📝"
+            title="PGN Game Review"
+            description="Analyze games with move quality and accuracy"
+            onClick={() => onModeSelect('review')}
+          />
+
+          <ModeCard
             icon="📋"
             title="Load from FEN"
             description="Input a FEN string to analyze or play"

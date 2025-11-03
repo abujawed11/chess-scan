@@ -6,7 +6,7 @@ import { isLightSquare, getSquareNotation } from '../../utils/chessUtils';
 export default function ChessBoard({
   position,
   selectedSquare,
-  legalMoves,
+  legalMoves = [],
   lastMove,
   bestMove,
   showBestMoveArrow,
