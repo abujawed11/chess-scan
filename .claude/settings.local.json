@@ -27,7 +27,8 @@
       "Bash(npm uninstall:*)",
       "Bash(tree:*)",
       "Bash(mkdir:*)",
-      "Bash(timeout /t 5)"
+      "Bash(timeout /t 5)",
+      "Bash(\"/d/react/chess-scan/CHESS_ANALYSIS.md\")"
     ],
     "deny": [],
     "ask": []
