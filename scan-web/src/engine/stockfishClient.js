@@ -1,10 +1,26 @@
 // src/utils/stockfishClient.js
 export class StockfishClient {
   constructor(path = '/stockfish.js') {
-    this.worker = new Worker(path);
+    this.worker = null;
     this._listeners = new Set();
+    this._errorListeners = new Set();
     this._ready = false;
     this._resolver = null;
+    this._crashed = false;
+    this._initTimeout = null;
+
+    try {
+      this.worker = new Worker(path);
+      this._setupWorkerHandlers();
+      this._startInitTimeout();
+    } catch (error) {
+      console.error('Failed to initialize Stockfish worker:', error);
+      this._handleError('Failed to load Stockfish engine. Please check your internet connection and refresh the page.', error);
+    }
+  }
+
+  _setupWorkerHandlers() {
+    if (!this.worker) return;
 
     this.worker.onmessage = (e) => {
       const msg = String(e.data);
@@ -18,23 +34,137 @@ export class StockfishClient {
         this.worker.postMessage('isready');
       } else if (msg.includes('readyok')) {
         this._ready = true;
+        this._clearInitTimeout();
         if (this._resolver) {
           this._resolver();
           this._resolver = null;
         }
       }
     };
+
+    // Handle worker errors
+    this.worker.onerror = (error) => {
+      console.error('Stockfish worker error:', error);
+      this._crashed = true;
+      this._clearInitTimeout();
+      this._handleError(
+        'Chess engine encountered an error. The analysis feature may not work properly.',
+        error
+      );
+    };
+
+    // Handle worker termination (unexpected crashes)
+    this.worker.onmessageerror = (error) => {
+      console.error('Stockfish message error:', error);
+      this._handleError('Failed to communicate with chess engine.', error);
+    };
   }
 
-  onMessage(fn) { this._listeners.add(fn); return () => this._listeners.delete(fn); }
-  waitReady() { return this._ready ? Promise.resolve() : new Promise(res => (this._resolver = res)); }
+  _startInitTimeout() {
+    // Set a timeout for engine initialization (10 seconds)
+    this._initTimeout = setTimeout(() => {
+      if (!this._ready) {
+        console.error('Stockfish initialization timeout');
+        this._handleError('Chess engine failed to start within expected time. Please refresh the page.');
+      }
+    }, 10000);
+  }
 
-  // convenience commands
-  ucinewgame()      { this.worker.postMessage('ucinewgame'); }
-  stop()            { this.worker.postMessage('stop'); }
-  setOption(n, v)   { this.worker.postMessage(`setoption name ${n} value ${v}`); }
-  positionFen(fen)  { this.worker.postMessage(`position fen ${fen}`); }
-  goDepth(d)        { this.worker.postMessage(`go depth ${d}`); }
-  goMovetime(ms)    { this.worker.postMessage(`go movetime ${ms}`); }
-  terminate()       { this.worker.terminate(); }
+  _clearInitTimeout() {
+    if (this._initTimeout) {
+      clearTimeout(this._initTimeout);
+      this._initTimeout = null;
+    }
+  }
+
+  _handleError(message, error = null) {
+    const errorData = {
+      message,
+      error,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Notify all error listeners
+    for (const fn of this._errorListeners) {
+      try {
+        fn(errorData);
+      } catch (e) {
+        console.error('Error in error listener:', e);
+      }
+    }
+  }
+
+  onMessage(fn) {
+    this._listeners.add(fn);
+    return () => this._listeners.delete(fn);
+  }
+
+  onError(fn) {
+    this._errorListeners.add(fn);
+    return () => this._errorListeners.delete(fn);
+  }
+
+  waitReady() {
+    if (this._crashed) {
+      return Promise.reject(new Error('Engine has crashed'));
+    }
+    return this._ready ? Promise.resolve() : new Promise(res => (this._resolver = res));
+  }
+
+  isReady() {
+    return this._ready && !this._crashed;
+  }
+
+  hasCrashed() {
+    return this._crashed;
+  }
+
+  // convenience commands (with safety checks)
+  ucinewgame() {
+    if (this.worker && !this._crashed) {
+      this.worker.postMessage('ucinewgame');
+    }
+  }
+
+  stop() {
+    if (this.worker && !this._crashed) {
+      this.worker.postMessage('stop');
+    }
+  }
+
+  setOption(n, v) {
+    if (this.worker && !this._crashed) {
+      this.worker.postMessage(`setoption name ${n} value ${v}`);
+    }
+  }
+
+  positionFen(fen) {
+    if (this.worker && !this._crashed) {
+      this.worker.postMessage(`position fen ${fen}`);
+    }
+  }
+
+  goDepth(d) {
+    if (this.worker && !this._crashed) {
+      this.worker.postMessage(`go depth ${d}`);
+    }
+  }
+
+  goMovetime(ms) {
+    if (this.worker && !this._crashed) {
+      this.worker.postMessage(`go movetime ${ms}`);
+    }
+  }
+
+  terminate() {
+    this._clearInitTimeout();
+    if (this.worker) {
+      try {
+        this.worker.terminate();
+      } catch (error) {
+        console.error('Error terminating worker:', error);
+      }
+      this.worker = null;
+    }
+  }
 }

@@ -9,9 +9,12 @@
 **Fix Applied:** Added explicit comments and clarified validation pattern
 **Details:** See `BUG_FIX_LOG.md` for full analysis
 
-### Bug #2: No Error Boundary for Engine Crashes
-**Current Issue:** If Stockfish crashes, app continues silently with no feedback
-**Fix:** Add React error boundaries and engine error handling
+### ✅ Bug #2: No Error Boundary for Engine Crashes [FIXED]
+**Original Issue:** If Stockfish crashes, app continues silently with no feedback
+**Location:** `src/engine/stockfishClient.js`, `src/hooks/useStockfish.js`
+**Status:** ✅ **RESOLVED** - Comprehensive error handling implemented
+**Fix Applied:** Added React error boundaries, worker error handlers, and user notifications
+**Details:** See `BUG_FIX_LOG.md` for full implementation details
 
 ### Bug #3: Worker Error Handling Missing
 **Current Issue:** Stockfish worker errors are not caught

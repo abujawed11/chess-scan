@@ -7,6 +7,7 @@ import GamePlay from './components/pages/GamePlay'
 import VisualEditor from './VisualEditor'
 import GridAdjuster from './GridAdjuster'     // shows/edits grid lines, returns 64 crops
 import BoardEditor from './BoardEditor'       // full final editor (flip, rotate, castling, etc.)
+import ErrorBoundary from './components/common/ErrorBoundary'
 import { API_ENDPOINTS } from './utils/constants'
 
 function App() {
@@ -144,47 +145,61 @@ function App() {
   // Play/Analyze mode
   if (mode === 'play') {
     return (
-      <GamePlay
-        initialFen={gameFen}
-        onBack={() => {
+      <ErrorBoundary
+        errorType="Chess Engine Error"
+        onReset={() => {
           setMode('home')
           setGameFen(null)
         }}
-      />
+      >
+        <GamePlay
+          initialFen={gameFen}
+          onBack={() => {
+            setMode('home')
+            setGameFen(null)
+          }}
+        />
+      </ErrorBoundary>
     )
   }
 
   // Scan flow screens
   if (mode === 'adjust' && (warpedBoard || originalImageDataUrl)) {
     return (
-      <GridAdjuster
-        warpedBoard={warpedBoard}
-        originalImage={originalImageDataUrl}
-        initH={gridSegments.h}
-        initV={gridSegments.v}
-        onCancel={() => setMode('scan')}
-        onDone={handleAdjustDone}
-      />
+      <ErrorBoundary onReset={() => setMode('scan')}>
+        <GridAdjuster
+          warpedBoard={warpedBoard}
+          originalImage={originalImageDataUrl}
+          initH={gridSegments.h}
+          initV={gridSegments.v}
+          onCancel={() => setMode('scan')}
+          onDone={handleAdjustDone}
+        />
+      </ErrorBoundary>
     )
   }
 
   if (mode === 'editor' && extractedSquares) {
     return (
-      <VisualEditor
-        squares={extractedSquares}
-        onComplete={handleEditorComplete}
-        onCancel={() => setMode('scan')}
-      />
+      <ErrorBoundary onReset={() => setMode('scan')}>
+        <VisualEditor
+          squares={extractedSquares}
+          onComplete={handleEditorComplete}
+          onCancel={() => setMode('scan')}
+        />
+      </ErrorBoundary>
     )
   }
 
   if (mode === 'board' && boardFen) {
     return (
-      <BoardEditor
-        initialFen={boardFen}
-        onCancel={() => setMode('scan')}
-        onDone={handleBoardDone}
-      />
+      <ErrorBoundary onReset={() => setMode('scan')}>
+        <BoardEditor
+          initialFen={boardFen}
+          onCancel={() => setMode('scan')}
+          onDone={handleBoardDone}
+        />
+      </ErrorBoundary>
     )
   }
 

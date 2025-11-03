@@ -34,8 +34,10 @@ export default function GamePlay({ initialFen, onBack }) {
     evaluation,
     bestMove,
     thinking,
+    engineError,
     requestAnalysis,
     stopAnalysis,
+    clearError,
   } = useStockfish();
 
   // Auto-trigger analysis when analysisEnabled becomes true
@@ -309,6 +311,48 @@ export default function GamePlay({ initialFen, onBack }) {
             </Button>
           </div>
         </div>
+
+        {/* Engine Error Notification */}
+        {engineError && (
+          <div style={{
+            padding: 16,
+            marginBottom: 16,
+            background: '#fef2f2',
+            border: '2px solid #ef4444',
+            borderRadius: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>⚠️</span>
+              <div>
+                <div style={{ fontWeight: 600, color: '#b91c1c', marginBottom: 4 }}>
+                  Chess Engine Error
+                </div>
+                <div style={{ fontSize: 14, color: '#991b1b' }}>
+                  {engineError}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={clearError}
+              style={{
+                padding: '8px 16px',
+                background: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: 14
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 24 }}>
           {/* Board */}
