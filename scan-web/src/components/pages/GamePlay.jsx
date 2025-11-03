@@ -1,18 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useChessGame } from "../../hooks/useChessGame";
 import { useStockfish } from "../../hooks/useStockfish";
+import { useChessTimer } from "../../hooks/useChessTimer";
 import ChessBoard from "../chess/ChessBoard";
 import EvaluationBar from "../chess/EvaluationBar";
 import MoveHistory from "../chess/MoveHistory";
 import AnalysisPanel from "../chess/AnalysisPanel";
+import ChessTimer from "../ChessTimer";
+import TimeControlSelector from "../TimeControlSelector";
 import Button from "../ui/Button";
 import ModeCard from "../ui/ModeCard";
-import { GAME_MODES, STOCKFISH_CONFIG } from "../../utils/constants";
+import { GAME_MODES, STOCKFISH_CONFIG, DEFAULT_TIME_CONTROL } from "../../utils/constants";
 
 export default function GamePlay({ initialFen, onBack }) {
   const [gameMode, setGameMode] = useState(null);
   const [playerColor, setPlayerColor] = useState('white');
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
+  const [selectedTimeControl, setSelectedTimeControl] = useState(null);
+  const [showTimeSelector, setShowTimeSelector] = useState(false);
   const lastAnalyzedFenRef = useRef(null);
 
   // Use custom hooks
@@ -40,6 +45,12 @@ export default function GamePlay({ initialFen, onBack }) {
     stopAnalysis,
     clearError,
   } = useStockfish();
+
+  // Chess timer hook - always call, but pass null if no time control selected yet
+  const timer = useChessTimer(selectedTimeControl || null);
+
+  // Track if we've initialized the timer for this game
+  const timerInitializedRef = useRef(false);
 
   // Auto-trigger analysis when position changes (only in analyze mode)
   useEffect(() => {
@@ -93,9 +104,18 @@ export default function GamePlay({ initialFen, onBack }) {
     const move = makeMove(from, to, promotion);
     // Request analysis for next position (for computer modes, analysis is auto-enabled)
     if (move) {
+      if (timer) {
+        // Start timer on first move
+        if (moveHistory.length === 1 && !timer.gameActive) {
+          console.log('⏱️ Starting timer on first move (computer)');
+          timer.startTimer();
+        }
+        // Always switch turn after a move (including first move)
+        setTimeout(() => timer.switchTurn(), 50);
+      }
       setTimeout(() => requestAnalysis(game.fen()), 100);
     }
-  }, [bestMove, gameOver, makeMove, game, requestAnalysis, stopAnalysis]);
+  }, [bestMove, gameOver, makeMove, game, requestAnalysis, stopAnalysis, timer, moveHistory]);
 
   // Computer vs Computer auto-play
   useEffect(() => {
@@ -125,10 +145,21 @@ export default function GamePlay({ initialFen, onBack }) {
   // Handle square click with game mode context
   const handleSquareClick = useCallback((square) => {
     const move = onSquareClick(square, playerColor, gameMode);
-    if (move && analysisEnabled) {
-      setTimeout(() => requestAnalysis(game.fen()), 100);
+    if (move) {
+      if (timer) {
+        // Start timer on first move
+        if (moveHistory.length === 1 && !timer.gameActive) {
+          console.log('⏱️ Starting timer on first move');
+          timer.startTimer();
+        }
+        // Always switch turn after a move (including first move)
+        setTimeout(() => timer.switchTurn(), 50);
+      }
+      if (analysisEnabled) {
+        setTimeout(() => requestAnalysis(game.fen()), 100);
+      }
     }
-  }, [onSquareClick, playerColor, gameMode, analysisEnabled, game, requestAnalysis]);
+  }, [onSquareClick, playerColor, gameMode, analysisEnabled, game, requestAnalysis, timer, moveHistory]);
 
   // Get hint
   const getHint = useCallback(() => {
@@ -142,14 +173,59 @@ export default function GamePlay({ initialFen, onBack }) {
   const startGame = (mode, color = 'white') => {
     setGameMode(mode);
     setPlayerColor(color);
+    // Show time control selector if not unlimited
+    setShowTimeSelector(true);
   };
+
+  // Handle time control selection
+  const handleTimeControlSelect = useCallback((timeControl) => {
+    setSelectedTimeControl(timeControl);
+    setShowTimeSelector(false);
+  }, []);
+
+  // Don't auto-start timer - it will start on first move
+  useEffect(() => {
+    console.log(`⏱️ GamePlay timer ready: selectedTimeControl=${selectedTimeControl?.name}, gameMode=${gameMode}`);
+  }, [selectedTimeControl, gameMode]);
+
+  // Handle time flag (player runs out of time)
+  useEffect(() => {
+    if (timer) {
+      timer.setOnTimeout((player) => {
+        console.log(`⏱️ ${player} ran out of time!`);
+        timer.pauseTimer();
+        // You can add game over logic here if needed
+        // For now, the timer will stop and show the timeout status
+      });
+    }
+  }, [timer]);
 
   // Handle reset with mode context
   const handleReset = useCallback(() => {
     resetGame();
     setAnalysisEnabled(false);
     stopAnalysis();
-  }, [resetGame, stopAnalysis]);
+    if (timer) {
+      timer.resetTimer();
+      // Don't auto-start timer - it will start on first move
+      console.log('⏱️ Timer reset - waiting for first move to start');
+    }
+  }, [resetGame, stopAnalysis, timer]);
+
+  // Time control selector screen
+  if (showTimeSelector && gameMode) {
+    return (
+      <div style={{ padding: '20px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', minHeight: '100vh' }}>
+        <TimeControlSelector
+          onSelect={handleTimeControlSelect}
+          onCancel={() => {
+            setShowTimeSelector(false);
+            setGameMode(null);
+          }}
+        />
+      </div>
+    );
+  }
 
   // Mode selection screen
   if (!gameMode) {
@@ -401,6 +477,20 @@ export default function GamePlay({ initialFen, onBack }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: 24 }}>
           {/* Board */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Chess Timer */}
+            {timer && selectedTimeControl && (
+              <ChessTimer
+                whiteTime={timer.whiteTime}
+                blackTime={timer.blackTime}
+                isWhiteTurn={timer.isWhiteTurn}
+                whiteTimedOut={timer.whiteTimedOut}
+                blackTimedOut={timer.blackTimedOut}
+                formatTime={timer.formatTime}
+                getTimeColor={timer.getTimeColor}
+                timeControl={selectedTimeControl}
+              />
+            )}
+
             {/* Evaluation Bar */}
             <EvaluationBar evaluation={evaluation} turn={game.turn()} />
 
