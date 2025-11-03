@@ -7,7 +7,7 @@ import MoveHistory from "../chess/MoveHistory";
 import AnalysisPanel from "../chess/AnalysisPanel";
 import Button from "../ui/Button";
 import ModeCard from "../ui/ModeCard";
-import { GAME_MODES } from "../../utils/constants";
+import { GAME_MODES, STOCKFISH_CONFIG } from "../../utils/constants";
 
 export default function GamePlay({ initialFen, onBack }) {
   const [gameMode, setGameMode] = useState(null);
@@ -278,6 +278,17 @@ export default function GamePlay({ initialFen, onBack }) {
             <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>
               {game.turn() === 'w' ? "White's turn" : "Black's turn"}
               {game.isCheck() && <span style={{ color: '#ef4444', fontWeight: 600 }}> • CHECK!</span>}
+            </div>
+            <div style={{ 
+              fontSize: 12, 
+              color: '#9ca3af', 
+              marginTop: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span>🤖</span>
+              <span>{STOCKFISH_CONFIG.VERSION} ({STOCKFISH_CONFIG.VARIANT})</span>
             </div>
           </div>
 

@@ -29,68 +29,133 @@ export default function MoveListReview({ moves, currentPly, onMoveClick }) {
       background: 'white',
       borderRadius: 12,
       border: '1px solid #e5e7eb',
-      maxHeight: 500,
-      overflowY: 'auto',
     }}>
-      {/* Header */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '50px 1fr 1fr',
-        padding: '12px 16px',
-        borderBottom: '2px solid #e5e7eb',
-        background: '#f9fafb',
-        fontWeight: 600,
-        fontSize: 13,
-        color: '#6b7280',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1,
-      }}>
-        <div>#</div>
-        <div>White</div>
-        <div>Black</div>
-      </div>
+      {/* Legend/Helper Section */}
+      <AnnotationLegend />
 
       {/* Move List */}
-      <div>
-        {movePairs.map((pair) => (
-          <div
-            key={pair.moveNumber}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '50px 1fr 1fr',
-              padding: '8px 16px',
-              borderBottom: '1px solid #f3f4f6',
-              fontSize: 14,
-            }}
-          >
-            {/* Move Number */}
-            <div style={{
-              color: '#9ca3af',
-              fontWeight: 600,
-            }}>
-              {pair.moveNumber}.
+      <div style={{
+        maxHeight: 500,
+        overflowY: 'auto',
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '50px 1fr 1fr',
+          padding: '12px 16px',
+          borderBottom: '2px solid #e5e7eb',
+          background: '#f9fafb',
+          fontWeight: 600,
+          fontSize: 13,
+          color: '#6b7280',
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        }}>
+          <div>#</div>
+          <div>White</div>
+          <div>Black</div>
+        </div>
+
+        {/* Move List */}
+        <div>
+          {movePairs.map((pair) => (
+            <div
+              key={pair.moveNumber}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '50px 1fr 1fr',
+                padding: '8px 16px',
+                borderBottom: '1px solid #f3f4f6',
+                fontSize: 14,
+              }}
+            >
+              {/* Move Number */}
+              <div style={{
+                color: '#9ca3af',
+                fontWeight: 600,
+              }}>
+                {pair.moveNumber}.
+              </div>
+
+              {/* White Move */}
+              {pair.white && (
+                <MoveCell
+                  move={pair.white}
+                  isActive={currentPly === pair.white.ply}
+                  onClick={() => onMoveClick(pair.white.ply)}
+                />
+              )}
+              {!pair.white && <div />}
+
+              {/* Black Move */}
+              {pair.black && (
+                <MoveCell
+                  move={pair.black}
+                  isActive={currentPly === pair.black.ply}
+                  onClick={() => onMoveClick(pair.black.ply)}
+                />
+              )}
+              {!pair.black && <div />}
             </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            {/* White Move */}
-            {pair.white && (
-              <MoveCell
-                move={pair.white}
-                isActive={currentPly === pair.white.ply}
-                onClick={() => onMoveClick(pair.white.ply)}
-              />
-            )}
-            {!pair.white && <div />}
+function AnnotationLegend() {
+  const legends = [
+    { symbol: '📖', label: 'Book', description: 'Opening book move' },
+    { symbol: '!!', label: 'Best', description: 'Best move (≤15cp)' },
+    { symbol: '!', label: 'Excellent', description: 'Excellent move (≤50cp)' },
+    { symbol: '', label: 'Good', description: 'Good move (≤120cp)' },
+    { symbol: '?!', label: 'Inaccuracy', description: 'Inaccuracy (120-300cp)' },
+    { symbol: '?', label: 'Mistake', description: 'Mistake (300-700cp)' },
+    { symbol: '??', label: 'Blunder', description: 'Blunder (>700cp)' },
+  ];
 
-            {/* Black Move */}
-            {pair.black && (
-              <MoveCell
-                move={pair.black}
-                isActive={currentPly === pair.black.ply}
-                onClick={() => onMoveClick(pair.black.ply)}
-              />
-            )}
-            {!pair.black && <div />}
+  return (
+    <div style={{
+      padding: 12,
+      background: '#f0f9ff',
+      borderBottom: '1px solid #e5e7eb',
+      fontSize: 12,
+    }}>
+      <div style={{
+        fontWeight: 600,
+        color: '#1e40af',
+        marginBottom: 8,
+        fontSize: 11,
+      }}>
+        📚 Move Quality Legend
+      </div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+        gap: 8,
+      }}>
+        {legends.map((item, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 8px',
+              background: 'white',
+              borderRadius: 4,
+              border: '1px solid #dbeafe',
+            }}
+            title={item.description}
+          >
+            <span style={{ fontSize: 13, fontWeight: 700, minWidth: 20 }}>
+              {item.symbol || '—'}
+            </span>
+            <span style={{ color: '#1f2937', fontSize: 11 }}>
+              <strong>{item.label}</strong>
+            </span>
           </div>
         ))}
       </div>
