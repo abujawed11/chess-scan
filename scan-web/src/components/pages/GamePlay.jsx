@@ -45,6 +45,28 @@ export default function GamePlay({ initialFen, onBack }) {
   useEffect(() => {
     const currentFen = boardFen;
 
+    // For computer modes, auto-enable analysis at game start
+    // This allows the computer to immediately start thinking without user intervention
+    // Human vs Computer: Computer thinks on its turn
+    // Computer vs Computer: Both sides think automatically
+    if ((gameMode === GAME_MODES.HUMAN_VS_COMPUTER || gameMode === GAME_MODES.COMPUTER_VS_COMPUTER) && !analysisEnabled) {
+      setAnalysisEnabled(true);
+      return; // Will trigger analysis on next effect run
+    }
+
+    // For Human vs Computer: Stop analysis when it's the human player's turn
+    // Only analyze during computer's turn
+    if (gameMode === GAME_MODES.HUMAN_VS_COMPUTER && analysisEnabled) {
+      const currentTurn = game.turn() === 'w' ? 'white' : 'black';
+      const isComputerTurn = currentTurn !== playerColor;
+      
+      if (!isComputerTurn) {
+        // It's the human's turn - stop analysis to avoid suggesting moves
+        stopAnalysis();
+        return;
+      }
+    }
+
     // Only analyze if:
     // 1. Analysis is enabled
     // 2. Not currently thinking
@@ -55,26 +77,25 @@ export default function GamePlay({ initialFen, onBack }) {
       lastAnalyzedFenRef.current = currentFen;
       requestAnalysis(game.fen());
     }
-  }, [analysisEnabled, boardFen, gameOver, thinking, requestAnalysis, game]);
+  }, [analysisEnabled, boardFen, gameOver, thinking, requestAnalysis, game, gameMode, playerColor, stopAnalysis]);
 
   // Make computer move
   const makeComputerMove = useCallback(() => {
     if (!bestMove || gameOver) return;
 
-    // Auto-enable analysis for computer modes
-    if ((gameMode === GAME_MODES.HUMAN_VS_COMPUTER || gameMode === GAME_MODES.COMPUTER_VS_COMPUTER) && !analysisEnabled) {
-      setAnalysisEnabled(true);
-    }
-
     const from = bestMove.substring(0, 2);
     const to = bestMove.substring(2, 4);
     const promotion = bestMove.length > 4 ? bestMove[4] : undefined;
 
+    // Stop current analysis before making the move
+    stopAnalysis();
+
     const move = makeMove(from, to, promotion);
-    if (move && analysisEnabled) {
+    // Request analysis for next position (for computer modes, analysis is auto-enabled)
+    if (move) {
       setTimeout(() => requestAnalysis(game.fen()), 100);
     }
-  }, [bestMove, gameOver, gameMode, analysisEnabled, makeMove, game, requestAnalysis]);
+  }, [bestMove, gameOver, makeMove, game, requestAnalysis, stopAnalysis]);
 
   // Computer vs Computer auto-play
   useEffect(() => {
@@ -293,8 +314,8 @@ export default function GamePlay({ initialFen, onBack }) {
           </div>
 
           <div style={{ display: 'flex', gap: 10 }}>
-            {/* Start/Stop Analysis Button */}
-            {!analysisEnabled ? (
+            {/* Start/Stop Analysis Button - Only show for Analyze mode, not for computer modes */}
+            {gameMode === GAME_MODES.ANALYZE && !analysisEnabled ? (
               <Button
                 onClick={() => {
                   console.log('🟢 Start Analysis button clicked');
@@ -304,7 +325,10 @@ export default function GamePlay({ initialFen, onBack }) {
               >
                 ▶️ Start Analysis
               </Button>
-            ) : (
+            ) : null}
+
+            {/* Stop Analysis Button - Show for any mode when analysis is enabled */}
+            {analysisEnabled && gameMode === GAME_MODES.ANALYZE ? (
               <Button
                 onClick={() => {
                   console.log('🔴 Stop Analysis button clicked');
@@ -315,7 +339,7 @@ export default function GamePlay({ initialFen, onBack }) {
               >
                 ⏹️ Stop Analysis {thinking && '(Analyzing...)'}
               </Button>
-            )}
+            ) : null}
 
             <Button onClick={undoMove} disabled={moveHistory.length === 0}>
               ↶ Undo
@@ -394,18 +418,33 @@ export default function GamePlay({ initialFen, onBack }) {
 
             {/* Best Move Display */}
             {bestMove && !gameOver && (
-              <div style={{
-                padding: 12,
-                background: '#f0fdf4',
-                border: '2px solid #10b981',
-                borderRadius: 10,
-                textAlign: 'center',
-                fontWeight: 600,
-                color: '#065f46'
-              }}>
-                💡 Best move: {bestMove.substring(0, 2)} → {bestMove.substring(2, 4)}
-                {thinking && <span style={{ marginLeft: 8 }}>🤔 Analyzing...</span>}
-              </div>
+              // Only show best move when:
+              // 1. In Analyze mode (user explicitly enabled analysis)
+              // 2. In Human vs Computer and it's the COMPUTER'S turn (not showing hints to human)
+              // 3. NOT showing suggestions to human player on their turn
+              (() => {
+                const currentTurn = game.turn() === 'w' ? 'white' : 'black';
+                const isComputerTurn = currentTurn !== playerColor;
+                const shouldShowBestMove = 
+                  gameMode === GAME_MODES.ANALYZE ||
+                  (gameMode === GAME_MODES.HUMAN_VS_COMPUTER && isComputerTurn) ||
+                  gameMode === GAME_MODES.COMPUTER_VS_COMPUTER;
+
+                return shouldShowBestMove ? (
+                  <div style={{
+                    padding: 12,
+                    background: '#f0fdf4',
+                    border: '2px solid #10b981',
+                    borderRadius: 10,
+                    textAlign: 'center',
+                    fontWeight: 600,
+                    color: '#065f46'
+                  }}>
+                    💡 Best move: {bestMove.substring(0, 2)} → {bestMove.substring(2, 4)}
+                    {thinking && <span style={{ marginLeft: 8 }}>🤔 Analyzing...</span>}
+                  </div>
+                ) : null;
+              })()
             )}
           </div>
 
