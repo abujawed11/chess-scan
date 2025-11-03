@@ -104,6 +104,160 @@
 - State: `{ whiteLevel: 'advanced', blackLevel: 'expert' }`
 - Different UCI `go depth X` commands per turn
 
+### 5. PGN Review & Move Quality ⭐⭐⭐ (New)
+
+**Goal:** Let users load a PGN and review the game with move-by-move playback, quality labels (Book/Best/Excellent/Good/Inaccuracy/Mistake/Blunder), per-side accuracy, and simple auto-play—similar to chess.com's Game Review.
+
+**Scope (first release):**
+
+* **PGN import** (single game): read tags (Event, Site, Date, White, Black, Result, ECO if present). Parse main line only; ignore side variations for now.
+* **Navigation & playback:** Prev/Next buttons, keyboard arrows, jump-to-move via clickable move list, Start/End, Auto-Play with speed (0.5×/1×/2×).
+* **Move list UI:** move number + SAN + a **badge** for quality; highlight current ply; show PGN comments/NAGs (read-only).
+* **Book detection:** flag "Book" if the position is inside a small local opening book (first ~16 plies).
+* **Move quality classification:** label each move using evaluation deltas between the best engine line and the played move. Thresholds (tunable):
+  - Best (≤15cp)
+  - Excellent (≤50cp)
+  - Good (≤120cp)
+  - Inaccuracy (120–300cp)
+  - Mistake (300–700cp)
+  - Blunder (>700cp)
+  - "Book" overrides all others
+* **Accuracy score (per player):** compute a 0–100 score from per-move penalties (Best=0 … Blunder=200), normalized by the number of scored moves.
+* **Summary panel:** player names, result, opening/ECO (if known), Accuracy (White/Black), counts of each label with icons.
+* **Reliability:** if engine analysis is unavailable, users can still import PGN and navigate; unscored moves are clearly marked.
+
+**Out of scope (for this release):**
+
+* Side-variation trees, editing PGN, multi-PV UI, endgame tablebases, cloud engines, multiplayer sharing.
+
+**User stories:**
+
+* *As a player*, I can drop a PGN file and immediately step through the game with Next/Prev or Auto-Play.
+* *As a learner*, I can see which moves were Book, good, or mistakes, and get an overall accuracy for both sides.
+* *As a reviewer*, I can click any move in the list to jump the board there and read PGN comments.
+
+**UX notes:**
+
+* Keep controls adjacent to the board: Prev/Play/Next, speed selector, slider/scrubber.
+* Compact right-side panel for Summary + Move List.
+* Small eval bar is optional; do not block release on it.
+
+**Data/tech notes (non-implementation):**
+
+* Cache evaluations per FEN; reuse across moves.
+* Treat mate scores as large centipawn values for classification math.
+* Persist last reviewed game (metadata + position index) for quick resume.
+
+**Acceptance criteria:**
+
+1. Loading a valid PGN shows players, result, opening (if available), and a clickable move list; clicking move *n* sets the board to that position.
+2. Auto-Play advances one ply per chosen speed and stops at the end or on user interaction.
+3. Moves that match book lines are labeled **Book**; non-book moves are labeled per thresholds.
+4. Per-side **Accuracy** displays and changes if thresholds are adjusted.
+5. If engine analysis is unavailable, the review remains usable; unscored moves are shown as such.
+
+**Dependencies & risks:**
+
+* Requires a lightweight local opening book (JSON) and background evaluation availability; graceful fallback when unavailable.
+* Large PGNs should degrade gracefully (progress indicator for analysis queue).
+
+**Effort estimate:** 5–7 days for first release (UX, parsing, labels, accuracy, navigation, summary), excluding multi-PV/eval graph.
+
+**Follow-ups (P1.5/P2):**
+
+* Eval bar/graph, multi-PV display (top-3 lines), side-variation browsing, shareable review links, import multiple games.
+
+### 6. Post-Game Analysis (Analyze Your Completed Games) ⭐⭐⭐ (Your Request)
+
+**Goal:** After finishing a game (HvH, HvC, CvC), immediately analyze it with the same PGN Review system—just like chess.com's "Computer Analysis" button.
+
+**User Flow:**
+
+1. **Game Ends**: Checkmate, draw, or resign
+2. **Game Over Screen**: Shows result + "Analyze Game" button
+3. **Click Analysis**: Game automatically converts to PGN and loads into review mode
+4. **See Results**: Move quality badges, accuracy scores, mistakes highlighted
+5. **Review**: Navigate through your game, see where you went wrong
+6. **Save/Export**: Option to save PGN with analysis annotations
+
+**Key Features:**
+
+* **Automatic PGN Generation**: Convert just-played game to PGN format
+  - Include: Player names (or "You" vs "Computer"), result, date/time
+  - Add metadata: Time control used, game mode, difficulty level
+  - Preserve move timestamps if available
+* **One-Click Analysis**: "Analyze Game" button on game-over screen
+  - Queue background analysis (all moves)
+  - Show progress: "Analyzing move 15/40..."
+  - Navigate while analyzing (partial results)
+* **Full Review Interface**: Same as PGN Review feature #5
+  - Move quality badges (Book, Best, Blunder, etc.)
+  - Accuracy scores per player
+  - Move-by-move navigation
+  - Auto-play to review game flow
+* **Highlight Critical Moments**:
+  - Auto-jump to first blunder
+  - "Show me where I went wrong" button
+  - Mark turning points (eval swings)
+* **Comparison Mode**: Show what you should have played
+  - "Your move vs Best move" side-by-side
+  - Eval difference display
+  - Alternative line preview
+* **Save Options**:
+  - Save PGN to local storage
+  - Export PGN file with annotations
+  - Add to "My Games" library
+  - Share analysis link (future)
+
+**Integration Points:**
+
+* Works with PGN Review feature (#5) - uses same UI components
+* Reuses existing Stockfish analysis infrastructure
+* Stores in game database for later review
+
+**User Stories:**
+
+* *As a player*, after finishing a game I can click "Analyze" to see where I made mistakes.
+* *As a learner*, I can immediately review my game and understand my blunders before playing again.
+* *As an improver*, I can build a library of my analyzed games to track progress over time.
+
+**UX Notes:**
+
+* Game over modal shows:
+  - Result (Checkmate! White wins)
+  - Final position preview
+  - Buttons: [Rematch] [Analyze Game] [New Game] [Home]
+* Analysis auto-starts on click, shows progress bar
+* Can cancel analysis and return later
+* "My Games" section shows analyzed games with accuracy scores
+
+**Technical Notes:**
+
+* Generate PGN in standard format with tags
+* Store game metadata: timestamp, mode, players, result
+* Link game ID to analysis cache (FEN → eval)
+* Auto-save analysis to localStorage/IndexedDB
+* Lazy analysis: analyze on-demand if storage empty
+
+**Acceptance Criteria:**
+
+1. After any game ends, "Analyze Game" button appears
+2. Clicking it converts game to PGN and loads review mode
+3. Analysis runs in background with progress indicator
+4. Review interface shows move quality and accuracy
+5. Can save analyzed game for later review
+6. Works for all game modes (HvH, HvC, CvC)
+
+**Effort Estimate:** 2-3 days (after PGN Review #5 is complete)
+
+* Game-to-PGN conversion: 4 hours
+* Game-over modal UI: 3 hours
+* Integration with review mode: 1 day
+* Game library/storage: 1 day
+* Testing & polish: 4 hours
+
+**Priority:** P1 (Week 2-3) - Implement after PGN Review feature
+
 ---
 
 ## 📊 PRIORITY 2: ESSENTIAL GAMEPLAY FEATURES
