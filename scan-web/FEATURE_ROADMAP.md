@@ -2,10 +2,12 @@
 
 ## 🔴 CRITICAL BUGS TO FIX FIRST
 
-### Bug #1: Human vs Human Mode Turn Validation Missing ⚠️
-**Current Issue:** In HvH mode, both players can move ANY piece at any time, breaking chess rules!
+### ✅ Bug #1: Human vs Human Mode Turn Validation Missing [FIXED]
+**Original Issue:** In HvH mode, both players can move ANY piece at any time, breaking chess rules!
 **Location:** `src/hooks/useChessGame.js:49-56`
-**Fix:** Add turn validation check for HvH mode (currently only checks HvC mode)
+**Status:** ✅ **RESOLVED** - Turn validation was working via implicit chess.js checks
+**Fix Applied:** Added explicit comments and clarified validation pattern
+**Details:** See `BUG_FIX_LOG.md` for full analysis
 
 ### Bug #2: No Error Boundary for Engine Crashes
 **Current Issue:** If Stockfish crashes, app continues silently with no feedback
@@ -204,25 +206,74 @@
 - [ ] **Variation Branches**: Explore side lines without losing main game
 - [ ] **Bookmark Positions**: Flag interesting moments for later review
 
-### 14. Visual Enhancements
+### 14. Board Controls & Orientation ⭐ (Your Request)
+- [ ] **Flip Board**: Rotate 180° to view from black's perspective
+  - Button in game controls
+  - Keyboard shortcut: F key
+  - Smooth rotation animation
+  - Updates move arrows and highlights accordingly
+- [ ] **Flip Coordinates**: Mirror coordinate labels (a1 ↔ h8)
+  - Independent of board flip
+  - Option: "Coordinates from Black's perspective"
+  - Transforms: a→h, b→g, c→f, d→e, 1→8, 2→7, etc.
+  - Useful for studying from Black's viewpoint
+- [ ] **Rotate Board**: 90°, 180°, 270° rotations
+  - Rare use case but requested feature
+  - Mostly for fun/screenshots
+- [ ] **Auto-Flip**: Automatically flip board when playing as Black
+  - Toggle: "Auto-flip board to my color"
+  - Common in online chess platforms
+- [ ] **Lock Orientation**: Prevent accidental flips
+  - Useful during analysis
+  - Toggle: "Lock board orientation"
+- [ ] **Coordinate Visibility**:
+  - Show/hide coordinates completely
+  - Coordinates on all 4 sides (full labeling)
+  - Coordinates inside board (like Chess.com)
+  - Coordinates outside board (like Lichess)
+- [ ] **Board Perspective Memory**: Remember preferred orientation per mode
+  - HvH: No auto-flip
+  - HvC as White: Normal orientation
+  - HvC as Black: Auto-flip
+  - Analysis: Last used orientation
+
+### 15. Visual Enhancements
 - [ ] **Move Animations**: Smooth piece sliding (300ms default)
 - [ ] **Capture Animations**: Piece fade-out effect
 - [ ] **Check Animation**: King square pulses red
 - [ ] **Last Move Highlight**: More visible color options
 - [ ] **Legal Move Previews**: Hover over piece to see legal squares
-- [ ] **Coordinate Toggle**: Show/hide board coordinates
 - [ ] **Square Highlights**: Custom colors for user-selected squares
+- [ ] **Piece Shadows**: 3D-like shadows under pieces
+- [ ] **Glow Effects**: Subtle glow on selected pieces
 
-### 15. Board Customization
-- [ ] **Piece Sets**: 10+ styles
+### 16. Board Themes & Appearance
+- [ ] **Piece Sets**: 20+ styles
   - cburnett (current), merida, alpha, california, cardinal, chess7, companion, dubrovny, fantasy, fresca, gioco, governor, horsey, icpieces, kiwen-suwi, kosal, leipzig, letter, libra, maestro, mpchess, pirouetti, pixel, reillycraig, riohacha, shapes, spatial, staunty, tatiana
-- [ ] **Board Themes**: 15+ color schemes
+  - Add: Staunton, Celtic, Eyes, Horsey, Symmetric
+- [ ] **Board Themes**: 20+ color schemes
   - Blue, Brown, Green, IC, Pink, Purple, Red, Bases (light/dark variants)
   - Wood, Metal, Glass, Marble textures
+  - Tournament Green, Classic Brown, Modern Gray, Neon, High Contrast
 - [ ] **Board Size**: Adjustable (400px to 800px)
+  - Slider control: "Board Size"
+  - Save preference per device
+  - Responsive: Auto-adjust for mobile
 - [ ] **3D Board View**: WebGL 3D chess board (optional)
-- [ ] **Board Rotation**: Smooth flip animation
+  - Toggle between 2D/3D
+  - Camera angle adjustment
+  - Piece shadows and lighting
 - [ ] **Piece Animation Speed**: Slow/Normal/Fast/Instant
+  - Slider: 100ms to 1000ms
+  - Disable for slow devices
+- [ ] **Square Borders**: Add borders around squares
+  - Helps distinguish pieces on similar colors
+  - Adjustable thickness: 1-3px
+- [ ] **Highlight Styles**: Different highlight shapes
+  - Solid color (current)
+  - Border outline
+  - Corner markers
+  - Glow effect
 
 ### 16. Sound Effects & Audio
 - [ ] **Move Sound**: Different sounds for normal move, capture, castle, check

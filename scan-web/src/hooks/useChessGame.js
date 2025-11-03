@@ -49,11 +49,17 @@ export function useChessGame(initialFen) {
   const onSquareClick = useCallback((square, playerColor = null, gameMode = 'hvh') => {
     if (gameOver) return;
 
-    // Check if it's human's turn in HvC mode
+    // Turn validation for different game modes
+    const currentTurn = game.turn() === 'w' ? 'white' : 'black';
+
     if (gameMode === 'hvc' && playerColor) {
-      const currentTurn = game.turn() === 'w' ? 'white' : 'black';
+      // Human vs Computer: Check if it's human's turn
       if (currentTurn !== playerColor) return;
     }
+
+    // For Human vs Human mode, we rely on piece.color === game.turn() checks below
+    // This ensures each player can only move pieces of their color
+    // The chess.js library enforces turn order through the game.turn() method
 
     const piece = game.get(square);
 
