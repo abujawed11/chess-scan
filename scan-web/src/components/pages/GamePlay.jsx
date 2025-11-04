@@ -228,8 +228,14 @@ export default function GamePlay({ initialFen, onBack }) {
   const startGame = (mode, color = 'white') => {
     setGameMode(mode);
     setPlayerColor(color);
-    // Show time control selector if not unlimited
-    setShowTimeSelector(true);
+    // Skip time control selector for Analyze mode
+    if (mode === GAME_MODES.ANALYZE) {
+      setSelectedTimeControl(null);
+      setShowTimeSelector(false);
+    } else {
+      // Show time control selector for other modes
+      setShowTimeSelector(true);
+    }
   };
 
   // Handle time control selection
