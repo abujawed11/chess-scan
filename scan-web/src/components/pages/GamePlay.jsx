@@ -6,6 +6,7 @@ import ChessBoard from "../chess/ChessBoard";
 import EvaluationBar from "../chess/EvaluationBar";
 import MoveHistory from "../chess/MoveHistory";
 import AnalysisPanel from "../chess/AnalysisPanel";
+import GameActions from "../chess/GameActions";
 import ChessTimer from "../ChessTimer";
 import TimeControlSelector from "../TimeControlSelector";
 import Button from "../ui/Button";
@@ -18,6 +19,7 @@ export default function GamePlay({ initialFen, onBack }) {
   const [analysisEnabled, setAnalysisEnabled] = useState(false);
   const [selectedTimeControl, setSelectedTimeControl] = useState(null);
   const [showTimeSelector, setShowTimeSelector] = useState(false);
+  const [boardFlipped, setBoardFlipped] = useState(false);
   const lastAnalyzedFenRef = useRef(null);
 
   // Use custom hooks
@@ -211,6 +213,72 @@ export default function GamePlay({ initialFen, onBack }) {
       console.log('⏱️ Timer reset - waiting for first move to start');
     }
   }, [resetGame, stopAnalysis, timer]);
+
+  // Game Action Handlers
+  const handleResign = useCallback(() => {
+    console.log('🏳️ Player resigned');
+    // Stop the engine and timer
+    stopAnalysis();
+    setAnalysisEnabled(false);
+    if (timer) {
+      timer.resetTimer();
+    }
+    // End game with resignation result
+    resetGame();
+    setGameMode(null);
+  }, [resetGame, stopAnalysis, timer]);
+
+  const handleDrawOffer = useCallback(() => {
+    console.log('🤝 Draw offer sent');
+    // In a real multiplayer scenario, this would send to opponent
+    // For now, just show a message
+    alert('Draw offer sent! (In multiplayer, opponent would see this)');
+  }, []);
+
+  const handleAbort = useCallback(() => {
+    console.log('⏸️ Game aborted');
+    // Stop the engine and timer
+    stopAnalysis();
+    setAnalysisEnabled(false);
+    if (timer) {
+      timer.resetTimer();
+    }
+    // Abort without rating
+    resetGame();
+    setGameMode(null);
+  }, [resetGame, stopAnalysis, timer]);
+
+  const handleRematch = useCallback(() => {
+    console.log('🎮 Rematch requested');
+    // Stop the engine and reset timer
+    stopAnalysis();
+    setAnalysisEnabled(false);
+    if (timer) {
+      timer.resetTimer();
+    }
+    // Reset for new game with same mode and settings
+    setBoardFlipped(false);
+    resetGame();
+    // Keep the same time control and game mode
+  }, [resetGame, stopAnalysis, timer]);
+
+  const handleNewGameSameSettings = useCallback(() => {
+    console.log('⚙️ New game with same settings');
+    // Stop the engine and reset timer
+    stopAnalysis();
+    setAnalysisEnabled(false);
+    if (timer) {
+      timer.resetTimer();
+    }
+    // Reset for new game with same mode and settings
+    setBoardFlipped(false);
+    resetGame();
+  }, [resetGame, stopAnalysis, timer]);
+
+  const handleFlipBoard = useCallback(() => {
+    setBoardFlipped(!boardFlipped);
+    console.log('🔄 Board flipped');
+  }, [boardFlipped]);
 
   // Time control selector screen
   if (showTimeSelector && gameMode) {
@@ -504,6 +572,7 @@ export default function GamePlay({ initialFen, onBack }) {
               showBestMoveArrow={gameMode === GAME_MODES.ANALYZE}
               onSquareClick={handleSquareClick}
               gameMode={gameMode}
+              flipped={boardFlipped}
             />
 
             {/* Best Move Display */}
@@ -558,6 +627,21 @@ export default function GamePlay({ initialFen, onBack }) {
                 </div>
               </div>
             )}
+
+            {/* Game Actions */}
+            <GameActions
+              gameOver={gameOver}
+              moveCount={moveHistory.length}
+              gameMode={gameMode}
+              playerColor={playerColor}
+              onResign={handleResign}
+              onDrawOffer={handleDrawOffer}
+              onAbort={handleAbort}
+              onRematch={handleRematch}
+              onNewGameSameSettings={handleNewGameSameSettings}
+              onFlipBoard={handleFlipBoard}
+              boardFlipped={boardFlipped}
+            />
 
             {/* Move History */}
             <MoveHistory moves={moveHistory} />

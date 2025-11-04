@@ -12,6 +12,7 @@ export default function ChessBoard({
   showBestMoveArrow,
   onSquareClick,
   gameMode,
+  flipped = false,
 }) {
   const board = [];
 
@@ -55,7 +56,7 @@ export default function ChessBoard({
       width: 560,
       height: 560,
       margin: '0 auto',
-      position: 'relative'
+      position: 'relative',
     }}>
       <div style={{
         display: 'grid',
@@ -63,13 +64,16 @@ export default function ChessBoard({
         gridTemplateRows: 'repeat(8, 1fr)',
         width: '100%',
         height: '100%',
-        gap: 0
+        gap: 0,
+        transform: flipped ? 'rotate(180deg)' : 'none',
+        transition: 'transform 0.3s ease-in-out'
       }}>
         {board.map((squareData) => (
           <Square
             key={squareData.square}
             {...squareData}
             onClick={() => onSquareClick(squareData.square)}
+            flipped={flipped}
           />
         ))}
       </div>

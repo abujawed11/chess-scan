@@ -10,6 +10,7 @@ export default function Square({
   isBestMoveSquare,
   onClick,
   showCoordinates = true,
+  flipped = false,
 }) {
   return (
     <div
@@ -39,7 +40,8 @@ export default function Square({
           fontWeight: 700,
           color: isLight ? '#b58863' : '#f0d9b5',
           opacity: 0.7,
-          userSelect: 'none'
+          userSelect: 'none',
+          transform: flipped ? 'rotate(180deg)' : 'none'
         }}>
           {square[1]}
         </div>
@@ -53,7 +55,8 @@ export default function Square({
           fontWeight: 700,
           color: isLight ? '#b58863' : '#f0d9b5',
           opacity: 0.7,
-          userSelect: 'none'
+          userSelect: 'none',
+          transform: flipped ? 'rotate(180deg)' : 'none'
         }}>
           {square[0]}
         </div>
@@ -71,7 +74,8 @@ export default function Square({
             objectFit: 'contain',
             padding: '8%',
             userSelect: 'none',
-            pointerEvents: 'none'
+            pointerEvents: 'none',
+            transform: flipped ? 'rotate(180deg)' : 'none'
           }}
         />
       )}
