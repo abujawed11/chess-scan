@@ -54,6 +54,12 @@ export default function GamePlay({ initialFen, onBack }) {
   // Track if we've initialized the timer for this game
   const timerInitializedRef = useRef(false);
 
+  // Track last attempted move for each position to prevent duplicates
+  const lastAttemptedMoveRef = useRef({ fen: null, move: null });
+
+  // Track if we've scheduled a move for the current position to prevent re-scheduling
+  const moveScheduledRef = useRef({ fen: null, move: null });
+
   // Auto-trigger analysis when position changes (only in analyze mode)
   useEffect(() => {
     const currentFen = boardFen;
@@ -63,6 +69,7 @@ export default function GamePlay({ initialFen, onBack }) {
     // Human vs Computer: Computer thinks on its turn
     // Computer vs Computer: Both sides think automatically
     if ((gameMode === GAME_MODES.HUMAN_VS_COMPUTER || gameMode === GAME_MODES.COMPUTER_VS_COMPUTER) && !analysisEnabled) {
+      console.log('🟢 Auto-enabling analysis for computer mode');
       setAnalysisEnabled(true);
       return; // Will trigger analysis on next effect run
     }
@@ -72,7 +79,7 @@ export default function GamePlay({ initialFen, onBack }) {
     if (gameMode === GAME_MODES.HUMAN_VS_COMPUTER && analysisEnabled) {
       const currentTurn = game.turn() === 'w' ? 'white' : 'black';
       const isComputerTurn = currentTurn !== playerColor;
-      
+
       if (!isComputerTurn) {
         // It's the human's turn - stop analysis to avoid suggesting moves
         stopAnalysis();
@@ -88,7 +95,14 @@ export default function GamePlay({ initialFen, onBack }) {
     if (analysisEnabled && !thinking && !gameOver && currentFen !== lastAnalyzedFenRef.current) {
       console.log('🔄 Position changed, triggering analysis for:', currentFen);
       lastAnalyzedFenRef.current = currentFen;
-      requestAnalysis(game.fen());
+      requestAnalysis(boardFen);
+    } else if (analysisEnabled) {
+      console.log('⏸️ Analysis not triggered:', {
+        thinking,
+        gameOver,
+        fensMatch: currentFen === lastAnalyzedFenRef.current,
+        currentFen: currentFen.substring(0, 50) + '...'
+      });
     }
   }, [analysisEnabled, boardFen, gameOver, thinking, requestAnalysis, game, gameMode, playerColor, stopAnalysis]);
 
@@ -96,16 +110,30 @@ export default function GamePlay({ initialFen, onBack }) {
   const makeComputerMove = useCallback(() => {
     if (!bestMove || gameOver) return;
 
+    const currentFen = game.fen();
+
+    // Don't try to make the same move twice for the same position
+    if (lastAttemptedMoveRef.current.fen === currentFen &&
+        lastAttemptedMoveRef.current.move === bestMove) {
+      console.log('⚠️ Already attempted move:', bestMove, 'for position:', currentFen);
+      return;
+    }
+
     const from = bestMove.substring(0, 2);
     const to = bestMove.substring(2, 4);
     const promotion = bestMove.length > 4 ? bestMove[4] : undefined;
+
+    // Mark this move as attempted for this position
+    lastAttemptedMoveRef.current = { fen: currentFen, move: bestMove };
 
     // Stop current analysis before making the move
     stopAnalysis();
 
     const move = makeMove(from, to, promotion);
-    // Request analysis for next position (for computer modes, analysis is auto-enabled)
+
+    // Only continue if move was successfully made
     if (move) {
+      console.log(`✅ Computer move made: ${from}${to}, new position:`, game.fen());
       if (timer) {
         // Start timer on first move
         if (moveHistory.length === 1 && !timer.gameActive) {
@@ -115,19 +143,44 @@ export default function GamePlay({ initialFen, onBack }) {
         // Always switch turn after a move (including first move)
         setTimeout(() => timer.switchTurn(), 50);
       }
-      setTimeout(() => requestAnalysis(game.fen()), 100);
+      // Don't manually request analysis here - let the auto-trigger effect handle it
+      // This prevents double analysis requests and race conditions
+    } else {
+      console.warn(`❌ Failed to make move: ${from}${to} for position: ${currentFen}`);
+      // If move failed, reset the attempted move tracker so we can try again
+      lastAttemptedMoveRef.current = { fen: null, move: null };
     }
-  }, [bestMove, gameOver, makeMove, game, requestAnalysis, stopAnalysis, timer, moveHistory]);
+  }, [bestMove, gameOver, makeMove, game, stopAnalysis, timer, moveHistory]);
 
   // Computer vs Computer auto-play
   useEffect(() => {
     if (gameMode === GAME_MODES.COMPUTER_VS_COMPUTER && !thinking && bestMove && !gameOver) {
+      const currentFen = game.fen();
+
+      // Check if we've already scheduled this move for this position
+      if (moveScheduledRef.current.fen === currentFen && moveScheduledRef.current.move === bestMove) {
+        console.log(`🤖 CvC: Move ${bestMove} already scheduled for this position, skipping`);
+        return; // Don't schedule again or return a cleanup function
+      }
+
+      console.log(`🤖 CvC: Scheduling move ${bestMove} in 1.5s...`);
+      moveScheduledRef.current = { fen: currentFen, move: bestMove };
+
       const timer = setTimeout(() => {
+        console.log(`🤖 CvC: Executing scheduled move ${bestMove}`);
+        moveScheduledRef.current = { fen: null, move: null }; // Clear after execution
         makeComputerMove();
-      }, 1000);
-      return () => clearTimeout(timer);
+      }, 1500); // 1.5 second delay between moves for better viewing
+
+      return () => {
+        console.log('🤖 CvC: Cleanup - clearing scheduled move timer');
+        clearTimeout(timer);
+        moveScheduledRef.current = { fen: null, move: null };
+      };
+    } else if (gameMode === GAME_MODES.COMPUTER_VS_COMPUTER) {
+      console.log('🤖 CvC: Not scheduling move:', { thinking, bestMove, gameOver });
     }
-  }, [gameMode, thinking, bestMove, gameOver, makeComputerMove]);
+  }, [gameMode, thinking, bestMove, gameOver, makeComputerMove, game]);
 
   // Human vs Computer: make computer move when it's computer's turn
   useEffect(() => {
@@ -207,6 +260,8 @@ export default function GamePlay({ initialFen, onBack }) {
     resetGame();
     setAnalysisEnabled(false);
     stopAnalysis();
+    lastAttemptedMoveRef.current = { fen: null, move: null };
+    moveScheduledRef.current = { fen: null, move: null };
     if (timer) {
       timer.resetTimer();
       // Don't auto-start timer - it will start on first move
@@ -220,6 +275,8 @@ export default function GamePlay({ initialFen, onBack }) {
     // Stop the engine and timer
     stopAnalysis();
     setAnalysisEnabled(false);
+    lastAttemptedMoveRef.current = { fen: null, move: null };
+    moveScheduledRef.current = { fen: null, move: null };
     if (timer) {
       timer.resetTimer();
     }
@@ -240,6 +297,8 @@ export default function GamePlay({ initialFen, onBack }) {
     // Stop the engine and timer
     stopAnalysis();
     setAnalysisEnabled(false);
+    lastAttemptedMoveRef.current = { fen: null, move: null };
+    moveScheduledRef.current = { fen: null, move: null };
     if (timer) {
       timer.resetTimer();
     }
@@ -253,6 +312,8 @@ export default function GamePlay({ initialFen, onBack }) {
     // Stop the engine and reset timer
     stopAnalysis();
     setAnalysisEnabled(false);
+    lastAttemptedMoveRef.current = { fen: null, move: null };
+    moveScheduledRef.current = { fen: null, move: null };
     if (timer) {
       timer.resetTimer();
     }
@@ -267,6 +328,8 @@ export default function GamePlay({ initialFen, onBack }) {
     // Stop the engine and reset timer
     stopAnalysis();
     setAnalysisEnabled(false);
+    lastAttemptedMoveRef.current = { fen: null, move: null };
+    moveScheduledRef.current = { fen: null, move: null };
     if (timer) {
       timer.resetTimer();
     }

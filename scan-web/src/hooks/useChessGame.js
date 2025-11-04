@@ -49,6 +49,12 @@ export function useChessGame(initialFen) {
   const onSquareClick = useCallback((square, playerColor = null, gameMode = 'hvh') => {
     if (gameOver) return;
 
+    // Block all manual moves in Computer vs Computer mode
+    if (gameMode === 'cvc') {
+      console.log('⚠️ Manual moves are disabled in Computer vs Computer mode');
+      return;
+    }
+
     // Turn validation for different game modes
     const currentTurn = game.turn() === 'w' ? 'white' : 'black';
 

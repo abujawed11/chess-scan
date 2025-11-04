@@ -195,11 +195,206 @@ function makeStartingPieces() {
 export default function VisualEditor({ squares, onComplete, onCancel }) {
   // pieces: { "e4": "K" | "p" ... }
   const [pieces, setPieces] = useState({})
-  const [selected, setSelected] = useState({ type: 'P', color: 'w' }) // palette choice
+  const [selected, setSelected] = useState({ type: 'P' }) // Remove color, detect automatically
   const [removeMode, setRemoveMode] = useState(false)
   const [sideToMove, setSideToMove] = useState('w')
   const [castling, setCastling] = useState({ K: false, Q: false, k: false, q: false })
   const [epSquare, setEpSquare] = useState('') // optional manual EP (like "e3"), leave blank for '-'
+
+  // Function to detect piece color from image data with improved accuracy
+  async function detectPieceColorFromImage(imageData) {
+    return new Promise((resolve) => {
+      try {
+        // Create a temporary canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Create an Image object to load the base64 PNG
+        const img = new Image();
+
+        img.onload = () => {
+          try {
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            // Draw the loaded image
+            ctx.drawImage(img, 0, 0);
+
+            // Get image data
+            const imageDataObj = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageDataObj.data;
+
+            if (data.length === 0) {
+              console.warn('Image data is empty');
+              resolve('w');
+              return;
+            }
+
+            // Analyze SMALL center region only (center 40% of image)
+            // This focuses on the piece itself, not the board square
+            const width = canvas.width;
+            const height = canvas.height;
+            const startX = Math.floor(width * 0.3);
+            const startY = Math.floor(height * 0.3);
+            const endX = Math.floor(width * 0.7);
+            const endY = Math.floor(height * 0.7);
+
+            // First pass: detect the board square color by sampling edges
+            const edgeBrightnesses = [];
+            // Sample top edge
+            for (let x = 0; x < width; x += 5) {
+              const i = (0 * width + x) * 4;
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+              edgeBrightnesses.push(brightness);
+            }
+            // Sample left edge
+            for (let y = 0; y < height; y += 5) {
+              const i = (y * width + 0) * 4;
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+              edgeBrightnesses.push(brightness);
+            }
+
+            edgeBrightnesses.sort((a, b) => a - b);
+            const boardSquareBrightness = edgeBrightnesses[Math.floor(edgeBrightnesses.length / 2)];
+
+            // Second pass: collect brightness values for center pixels only
+            // Filter out pixels that are too similar to the board square (background)
+            const brightnesses = [];
+            const pixelData = []; // Store full RGB for advanced analysis
+            const threshold = 40; // Pixels must differ by at least 40 from board color
+
+            for (let y = startY; y < endY; y++) {
+              for (let x = startX; x < endX; x++) {
+                const i = (y * width + x) * 4;
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const a = data[i + 3];
+
+                // Skip transparent pixels
+                if (a > 200) {
+                  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+                  // Only include pixels that are significantly different from board square
+                  // This filters out the background and keeps only the piece
+                  if (Math.abs(brightness - boardSquareBrightness) > threshold) {
+                    brightnesses.push(brightness);
+                    pixelData.push({ r, g, b, brightness });
+                  }
+                }
+              }
+            }
+
+            if (brightnesses.length === 0) {
+              console.warn('No opaque pixels found in image');
+              resolve('w');
+              return;
+            }
+
+            // Calculate median brightness (more robust than average)
+            brightnesses.sort((a, b) => a - b);
+            const medianBrightness = brightnesses[Math.floor(brightnesses.length / 2)];
+
+            // Calculate average for additional context
+            const avgBrightness = brightnesses.reduce((sum, b) => sum + b, 0) / brightnesses.length;
+
+            // Analyze the darkest 25% and brightest 25% separately
+            const q1Index = Math.floor(brightnesses.length * 0.25);
+            const q3Index = Math.floor(brightnesses.length * 0.75);
+            const darkestQuartile = brightnesses[q1Index];
+            const brightestQuartile = brightnesses[q3Index];
+
+            // Count very bright and very dark pixels with adjusted thresholds
+            const veryBright = brightnesses.filter(b => b > 200).length;
+            const veryDark = brightnesses.filter(b => b < 100).length;
+            const brightPercentage = veryBright / brightnesses.length;
+            const darkPercentage = veryDark / brightnesses.length;
+
+            // Calculate saturation (pieces with high saturation might have colored lighting)
+            let avgSaturation = 0;
+            pixelData.forEach(p => {
+              const max = Math.max(p.r, p.g, p.b);
+              const min = Math.min(p.r, p.g, p.b);
+              const saturation = max === 0 ? 0 : (max - min) / max;
+              avgSaturation += saturation;
+            });
+            avgSaturation /= pixelData.length;
+
+            console.log(`Color detection: board=${boardSquareBrightness.toFixed(1)}, median=${medianBrightness.toFixed(1)}, avg=${avgBrightness.toFixed(1)}, Q1=${darkestQuartile.toFixed(1)}, Q3=${brightestQuartile.toFixed(1)}, bright%=${(brightPercentage*100).toFixed(1)}%, dark%=${(darkPercentage*100).toFixed(1)}%, sat=${avgSaturation.toFixed(2)}, samples=${brightnesses.length}`);
+
+            // Decision logic with multi-factor analysis
+            // Strategy: Use multiple signals for better accuracy
+            // 1. Quartile analysis (Q1 = darkest 25%, Q3 = brightest 25%)
+            // 2. Median brightness
+            // 3. Percentage of very bright/dark pixels
+            // 4. Saturation (white pieces tend to be less saturated)
+
+            let whiteScore = 0;
+            let blackScore = 0;
+
+            // Factor 1: Brightest quartile (Q3)
+            // White pieces have very bright highlights (Q3 > 210)
+            // Black pieces have darker highlights (Q3 < 180)
+            if (brightestQuartile > 210) whiteScore += 2;
+            else if (brightestQuartile > 190) whiteScore += 1;
+            else if (brightestQuartile < 150) blackScore += 2;
+            else if (brightestQuartile < 180) blackScore += 1;
+
+            // Factor 2: Median brightness
+            if (medianBrightness > 180) whiteScore += 2;
+            else if (medianBrightness > 150) whiteScore += 1;
+            else if (medianBrightness < 110) blackScore += 2;
+            else if (medianBrightness < 140) blackScore += 1;
+
+            // Factor 3: Darkest quartile (Q1)
+            // White pieces have brighter shadows (Q1 > 150)
+            // Black pieces have darker shadows (Q1 < 100)
+            if (darkestQuartile > 150) whiteScore += 1;
+            else if (darkestQuartile < 80) blackScore += 2;
+            else if (darkestQuartile < 110) blackScore += 1;
+
+            // Factor 4: Percentage analysis
+            if (brightPercentage > 0.5) whiteScore += 2;
+            else if (brightPercentage > 0.3) whiteScore += 1;
+            if (darkPercentage > 0.3) blackScore += 2;
+            else if (darkPercentage > 0.15) blackScore += 1;
+
+            // Factor 5: Average brightness
+            if (avgBrightness > 170) whiteScore += 1;
+            else if (avgBrightness < 120) blackScore += 1;
+
+            // Factor 6: Low saturation = likely white (neutral color)
+            if (avgSaturation < 0.15) whiteScore += 1;
+
+            // Make decision based on scores
+            const result = whiteScore > blackScore ? 'w' : 'b';
+            console.log(`→ Scores: white=${whiteScore}, black=${blackScore} → Detected: ${result === 'w' ? 'WHITE' : 'BLACK'}`);
+            resolve(result);
+          } catch (e) {
+            console.warn('Error analyzing image:', e);
+            resolve('w');
+          }
+        };
+
+        img.onerror = () => {
+          console.warn('Failed to load image');
+          resolve('w');
+        };
+
+        // Start loading the image
+        img.src = `data:image/png;base64,${imageData}`;
+      } catch (e) {
+        console.warn('Color detection error:', e);
+        resolve('w');
+      }
+    });
+  }
 
   const fen = useMemo(
     () => buildFen({ pieces, squares, sideToMove, castling, epSquare }),
@@ -211,17 +406,48 @@ export default function VisualEditor({ squares, onComplete, onCancel }) {
   const totalCandidates = squares.filter((s) => !s.isEmpty).length
   const progress = Object.keys(pieces).length
 
-  function placeOrRemove(position, isRightClick = false) {
-    setPieces((prev) => {
-      const next = { ...prev }
-      if (removeMode || isRightClick) {
+  async function placeOrRemove(position, isRightClick = false) {
+    if (removeMode || isRightClick) {
+      // Remove piece synchronously
+      setPieces((prev) => {
+        const next = { ...prev }
         delete next[position]
-      } else {
-        const piece = selected.color === 'w' ? selected.type : selected.type.toLowerCase()
-        next[position] = piece
+        return next
+      })
+    } else {
+      setPieces((prev) => {
+        const next = { ...prev }
+        const existingPiece = next[position]
+
+        // If clicking on the same piece type, toggle color (white <-> black)
+        if (existingPiece && existingPiece.toUpperCase() === selected.type.toUpperCase()) {
+          console.log(`🔄 Toggling piece at ${position}: ${existingPiece} -> ${existingPiece === existingPiece.toUpperCase() ? existingPiece.toLowerCase() : existingPiece.toUpperCase()}`);
+          // Toggle between uppercase (white) and lowercase (black)
+          next[position] = existingPiece === existingPiece.toUpperCase()
+            ? existingPiece.toLowerCase()
+            : existingPiece.toUpperCase()
+        } else {
+          // New piece - detect color from image (we'll do this async after setState)
+          // For now, just place it as white, then update it
+          next[position] = selected.type
+        }
+        return next
+      })
+
+      // If it's a new piece (not a toggle), detect color asynchronously
+      const existingPiece = pieces[position]
+      if (!existingPiece || existingPiece.toUpperCase() !== selected.type.toUpperCase()) {
+        const square = squares.find(s => s.position === position)
+        const detectedColor = square ? await detectPieceColorFromImage(square.imageData) : 'w'
+        const piece = detectedColor === 'w' ? selected.type : selected.type.toLowerCase()
+
+        setPieces((prev) => {
+          const next = { ...prev }
+          next[position] = piece
+          return next
+        })
       }
-      return next
-    })
+    }
   }
 
   function onSquareClick(position) {
@@ -331,30 +557,6 @@ export default function VisualEditor({ squares, onComplete, onCancel }) {
               onChange={(e) => setEpSquare(e.target.value.trim())}
               style={{ width: 100 }}
             />
-          </div>
-
-          <div>
-            <label style={{ fontWeight: 600, marginRight: 8 }}>Place as:</label>
-            <label style={{ marginRight: 10 }}>
-              <input
-                type="radio"
-                name="place-color"
-                checked={selected.color === 'w'}
-                onChange={() => setSelected({ ...selected, color: 'w' })}
-                style={{ marginRight: 4 }}
-              />
-              White
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="place-color"
-                checked={selected.color === 'b'}
-                onChange={() => setSelected({ ...selected, color: 'b' })}
-                style={{ marginRight: 4 }}
-              />
-              Black
-            </label>
           </div>
         </div>
       </div>
