@@ -181,6 +181,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   const [castling, setCastling] = useState(seed.castling);
   const [ep, setEp] = useState(seed.ep);
   const [flipped, setFlipped] = useState(false);
+  const [coordinatesFlipped, setCoordinatesFlipped] = useState(false);
 
   const [dragPiece, setDragPiece] = useState(null);
   const [dragFrom, setDragFrom] = useState(null);
@@ -209,6 +210,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
   }
 
   function flipBoard(){ setFlipped(f => !f); }
+
 
   function placePiece(square, piece){
     // Validate before placing (lenient - allows building position piece by piece)
@@ -435,7 +437,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
               ✕ Cancel
             </ToolbarBtn>
             <ToolbarBtn
-              onClick={() => onDone?.({ fen, pieces, side, castling, ep, action: 'save' })}
+              onClick={() => onDone?.({ fen, pieces, side, castling, ep, action: 'save', coordinatesFlipped })}
               disabled={!fenStatus.valid || validationErrors.length > 0}
               style={{
                 background: (fenStatus.valid && validationErrors.length === 0)
@@ -448,7 +450,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
               ✓ Save
             </ToolbarBtn>
             <ToolbarBtn
-              onClick={() => onDone?.({ fen, pieces, side, castling, ep, action: 'play' })}
+              onClick={() => onDone?.({ fen, pieces, side, castling, ep, action: 'play', coordinatesFlipped })}
               disabled={!fenStatus.valid || validationErrors.length > 0}
               style={{
                 background: (fenStatus.valid && validationErrors.length === 0)
@@ -476,7 +478,10 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <ToolbarBtn onClick={flipBoard}>↻ Flip</ToolbarBtn>
             <ToolbarBtn onClick={fillStart}>⟲ Reset</ToolbarBtn>
-            <ToolbarBtn onClick={clearBoard}>✖ Clear</ToolbarBtn>
+            <ToolbarBtn onClick={() => setCoordinatesFlipped(c => !c)}>
+              ↔️ Coords
+            </ToolbarBtn>
+            <ToolbarBtn onClick={clearBoard}>⚠️ Clear</ToolbarBtn>
           </div>
 
           <div style={{
@@ -618,7 +623,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
                       }}
                     >
                       {/* Coordinates */}
-                      {sq[0] === 'a' && (
+                      {(coordinatesFlipped ? sq[0] === 'h' : sq[0] === 'a') && (
                         <div style={{
                           position: 'absolute',
                           left: 4,
@@ -632,7 +637,7 @@ export default function BoardEditor({ initialFen, onDone, onCancel }) {
                           {sq[1]}
                         </div>
                       )}
-                      {sq[1] === '1' && (
+                      {(coordinatesFlipped ? sq[1] === '8' : sq[1] === '1') && (
                         <div style={{
                           position: 'absolute',
                           right: 4,
@@ -1033,3 +1038,15 @@ function PieceStrip({ title, items, onDragStart, color }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+

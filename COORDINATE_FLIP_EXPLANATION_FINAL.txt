@@ -1,0 +1,71 @@
+================================================================================
+                    COORDINATE FLIP - FINAL CORRECT EXPLANATION
+================================================================================
+
+WHAT THE COORDINATE FLIP ACTUALLY DOES:
+
+It's a VISUAL-ONLY feature. It changes how the board LABELS are displayed,
+NOT how pieces are stored or how the FEN is generated.
+
+NO COORDINATE TRANSFORMATION HAPPENS:
+- a1 stays as a1
+- h8 stays as h8
+- FEN is always correct and valid
+- Pieces are never remapped
+
+VISUAL CHANGES ONLY:
+- Normal view: Rank labels on left (1-8), File labels on bottom (a-h)
+- Flipped view: Rank labels on right (8-1), File labels on top (h-a)
+
+HOW IT WORKS:
+
+The display logic checks coordinatesFlipped and conditionally shows coordinates:
+
+1. Rank labels (1, 2, 3... 8):
+   - Normal: Shows on squares where sq[1] === '1' (bottom rank)
+   - Flipped: Shows on squares where sq[1] === '8' (top rank)
+
+2. File labels (a, b, c... h):
+   - Normal: Shows on squares where sq[0] === 'a' (left file)
+   - Flipped: Shows on squares where sq[0] === 'h' (right file)
+
+WHAT STAYS THE SAME:
+✓ All pieces stored with original square references (a1, h8, etc.)
+✓ FEN always uses standard notation
+✓ No coordinate transformation happens
+✓ Valid FEN is guaranteed
+
+EXAMPLE:
+
+Setup: Starting position with white pawns on rank 2
+
+Normal view (coordinatesFlipped = false):
+  Ranks labeled: 1, 2, 3... 8 (left side, bottom to top)
+  Files labeled: a, b, c... h (bottom, left to right)
+  Pawns shown on rank 2
+
+Flipped view (coordinatesFlipped = true):
+  Ranks labeled: 8, 7, 6... 1 (right side, top to bottom)
+  Files labeled: h, g, f... a (top, right to left)
+  Pawns still on rank 2 (but visually at bottom from Black's view)
+  Pieces object: unchanged { a2: 'P', b2: 'P', ... h2: 'P' }
+  FEN: unchanged, still correct
+
+WHEN YOU SAVE/PLAY:
+- Pieces object: sent as-is (unchanged)
+- FEN: generated from pieces (always correct)
+- coordinatesFlipped: stored to remember user preference
+- Analysis mode receives correct FEN ✓
+
+WHY FEN STAYS VALID:
+The FEN is generated directly from the pieces object, which NEVER CHANGES.
+coordinatesFlipped only affects visual display, not data.
+
+FILES MODIFIED:
+- scan-web/src/BoardEditor.jsx
+  • Added coordinatesFlipped state
+  • Added "↔️ Coords" button to toggle display
+  • Updated coordinate display conditions
+  • Pass coordinatesFlipped to Analysis mode for visual preference
+
+STATUS: ✓ CORRECT - Visual display only, FEN always valid

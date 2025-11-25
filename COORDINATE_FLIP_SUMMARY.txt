@@ -1,0 +1,62 @@
+========================================
+COORDINATE FLIP FEATURE - FIX SUMMARY
+========================================
+
+PROBLEM:
+When you flip board coordinates in Board Editor, the setting was lost when switching to Analysis Mode.
+
+ROOT CAUSE:
+The coordinatesFlipped state never left the BoardEditor component - it wasn't passed through the callback to parent components.
+
+SOLUTION:
+Created a data pipeline to preserve the state across the component hierarchy:
+
+  BoardEditor.jsx
+  ├─ Added coordinatesFlipped state
+  └─ Pass it in onDone callback ✓
+
+  App.jsx  
+  ├─ Added boardCoordinatesFlipped state
+  ├─ Capture it in handleBoardDone()
+  └─ Pass to GamePlay component ✓
+
+  GamePlay.jsx
+  ├─ Accept boardCoordinatesFlipped prop
+  └─ Initialize boardFlipped with it ✓
+
+COMPONENT CHAIN:
+  BoardEditor(coordinatesFlipped) 
+    ↓ onDone callback
+  App(boardCoordinatesFlipped state)
+    ↓ prop passed
+  GamePlay(receives as prop)
+    ↓ initializes boardFlipped
+  ChessBoard(flipped prop)
+    ↓ rendered
+  Square components(display coordinates)
+
+USER EXPERIENCE:
+1. User flips coordinates in Board Editor: "↔️ Coords" button
+2. User enters Analysis Mode: "▶️ Play" button
+3. Coordinates remain flipped in Analysis Mode ✓
+4. User can still toggle board flip: handleFlipBoard() ✓
+
+TECHNICAL DETAILS:
+- Default: boardCoordinatesFlipped = false (backward compatible)
+- The ChessBoard and Square components already supported flipped display
+- We just needed to preserve the state through the component tree
+- No breaking changes to existing functionality
+
+FILES MODIFIED:
+✓ scan-web/src/BoardEditor.jsx (2 lines added to callbacks, button logic)
+✓ scan-web/src/App.jsx (state + capture logic)
+✓ scan-web/src/components/pages/GamePlay.jsx (prop + initialization)
+
+TESTING:
+1. Edit position in Board Editor
+2. Click "↔️ Coords" to flip coordinates
+3. Click "▶️ Play" to enter Analysis Mode
+4. Verify coordinates are still flipped
+5. Optional: Toggle flip board button to verify board rotation works independently
+
+STATUS: ✓ COMPLETE

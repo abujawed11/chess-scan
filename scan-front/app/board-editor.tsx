@@ -5,6 +5,7 @@ import { useState } from 'react';
 import BoardEditor from '@/components/chess/BoardEditor';
 import { GameMode } from '@/types/chess';
 import Button from '@/components/ui/Button';
+import ThemeSelector from '@/components/ui/ThemeSelector';
 
 export default function BoardEditorScreen() {
   const { fen, imageUri } = useLocalSearchParams<{ fen?: string; imageUri?: string }>();
@@ -38,12 +39,17 @@ export default function BoardEditorScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Position Recognized</Text>
-      <Text style={styles.subtitle}>
-        {editedFen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-          ? '⚠️ AI used starting position (adjust pieces below if needed)'
-          : '✓ AI recognized the position'}
-      </Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Position Recognized</Text>
+          <Text style={styles.subtitle}>
+            {editedFen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+              ? '⚠️ AI used starting position (adjust pieces below if needed)'
+              : '✓ AI recognized the position'}
+          </Text>
+        </View>
+        <ThemeSelector />
+      </View>
 
       <View style={styles.fenContainer}>
         <Text style={styles.fenLabel}>FEN:</Text>
@@ -123,6 +129,16 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    gap: 12,
+  },
+  headerText: {
+    flex: 1,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
@@ -131,7 +147,6 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: '#6b7280',
-    marginBottom: 24,
   },
   fenContainer: {
     backgroundColor: '#f3f4f6',

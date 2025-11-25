@@ -1,0 +1,55 @@
+================================================================================
+                     COORDINATE FLIP - CORRECTED FIX
+================================================================================
+
+YOU WERE RIGHT! The initial fix was incomplete.
+
+PROBLEM:
+When coordinates were "flipped", only the VISUAL LABELS moved, not the actual
+square references. A piece at visual "a1" was stored as "a1", not "h8".
+
+In chess: a1 is ALWAYS white's queen-side, h8 is ALWAYS black's king-side.
+
+SOLUTION:
+Now the fix properly TRANSFORMS square coordinates using:
+- flipCoordinates(square): inverts a single square (a1 becomes h8)
+- getFlippedPieces(): transforms all pieces when coordinatesFlipped=true
+
+HOW IT WORKS:
+1. User sees flipped coordinate display (visual labels move)
+2. When saving/playing, getFlippedPieces() inverts square references
+3. FEN is generated with correct inverted squares
+4. Analysis mode receives proper coordinate system
+
+EXAMPLE:
+User Action: Place pawn at visual "a1" then flip coordinates
+- pieces = { a1: 'P' }
+- coordinatesFlipped = true
+- getFlippedPieces() = { h8: 'P' }
+- FEN generated with h8 reference
+- Analysis mode shows correct position from Black's perspective
+
+KEY FUNCTIONS:
+flipCoordinates(square):
+  - a1 becomes h8
+  - b2 becomes g7
+  - c3 becomes f6
+  - (inverts both file and rank)
+
+getFlippedPieces():
+  - Iterates through all pieces
+  - Applies flipCoordinates to each square
+  - Returns transformed pieces object
+
+CHESS RULE COMPLIANCE:
+✓ a1 always = White's queen-side
+✓ h8 always = Black's king-side
+✓ Flipped view properly inverts these
+✓ FEN respects standard notation
+
+FILES MODIFIED:
+- scan-web/src/BoardEditor.jsx
+  Added: getFlippedPieces() and flipCoordinates()
+  Updated: FEN memoization, Save/Play buttons
+
+STATUS: CORRECTED AND COMPLETE

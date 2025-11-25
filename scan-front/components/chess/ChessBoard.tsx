@@ -2,11 +2,13 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { BoardPosition } from '@/types/chess';
 import { BOARD_CONFIG } from '@/constants/config';
+import { useTheme } from '@/context/ThemeContext';
 import ChessPiece from './ChessPiece';
 
 interface ChessBoardProps {
   position: BoardPosition;
   flipped?: boolean;
+  coordinatesFlipped?: boolean;
   onSquarePress?: (square: string) => void;
   highlightedSquares?: string[];
   selectedSquare?: string | null;
@@ -15,10 +17,12 @@ interface ChessBoardProps {
 export default function ChessBoard({
   position,
   flipped = false,
+  coordinatesFlipped = false,
   onSquarePress,
   highlightedSquares = [],
   selectedSquare = null,
 }: ChessBoardProps) {
+  const { boardColors } = useTheme();
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
   const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
@@ -26,6 +30,10 @@ export default function ChessBoard({
     files.reverse();
     ranks.reverse();
   }
+
+  // Create separate arrays for coordinate labels AFTER board flip
+  const displayFiles = coordinatesFlipped ? [...files].reverse() : files;
+  const displayRanks = coordinatesFlipped ? [...ranks].reverse() : ranks;
 
   const renderSquare = (file: string, rank: string) => {
     const square = `${file}${rank}`;
@@ -36,28 +44,34 @@ export default function ChessBoard({
     const isHighlighted = highlightedSquares.includes(square);
     const isSelected = selectedSquare === square;
 
+    // Determine square color based on state
+    let squareColor = isLightSquare ? boardColors.light : boardColors.dark;
+    if (isSelected) {
+      squareColor = boardColors.selected;
+    } else if (isHighlighted) {
+      squareColor = boardColors.highlight;
+    }
+
     return (
       <Pressable
         key={square}
         onPress={() => onSquarePress?.(square)}
         style={[
           styles.square,
-          isLightSquare ? styles.lightSquare : styles.darkSquare,
-          isSelected && styles.selectedSquare,
-          isHighlighted && styles.highlightedSquare,
+          { backgroundColor: squareColor },
         ]}
       >
         {piece && <ChessPiece piece={piece} size={BOARD_CONFIG.SQUARE_SIZE * 0.8} />}
 
         {/* Show file and rank labels on edges */}
         {rankIndex === 7 && (
-          <Text style={[styles.fileLabel, isLightSquare ? styles.darkText : styles.lightText]}>
-            {file}
+          <Text style={[styles.fileLabel, { color: isLightSquare ? boardColors.dark : boardColors.light }]}>
+            {displayFiles[fileIndex]}
           </Text>
         )}
         {fileIndex === (flipped ? 0 : 7) && (
-          <Text style={[styles.rankLabel, isLightSquare ? styles.darkText : styles.lightText]}>
-            {rank}
+          <Text style={[styles.rankLabel, { color: isLightSquare ? boardColors.dark : boardColors.light }]}>
+            {displayRanks[rankIndex]}
           </Text>
         )}
       </Pressable>
@@ -79,7 +93,9 @@ const styles = StyleSheet.create({
   board: {
     alignSelf: 'center',
     borderWidth: 2,
-    borderColor: '#333',
+    borderColor: '#2d2d2d',
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
@@ -91,36 +107,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  lightSquare: {
-    backgroundColor: BOARD_CONFIG.LIGHT_SQUARE_COLOR,
-  },
-  darkSquare: {
-    backgroundColor: BOARD_CONFIG.DARK_SQUARE_COLOR,
-  },
-  selectedSquare: {
-    backgroundColor: '#7dd3fc',
-  },
-  highlightedSquare: {
-    backgroundColor: '#86efac',
-  },
   fileLabel: {
     position: 'absolute',
     bottom: 2,
     right: 2,
     fontSize: 10,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   rankLabel: {
     position: 'absolute',
     top: 2,
     left: 2,
     fontSize: 10,
-    fontWeight: '600',
-  },
-  darkText: {
-    color: BOARD_CONFIG.DARK_SQUARE_COLOR,
-  },
-  lightText: {
-    color: BOARD_CONFIG.LIGHT_SQUARE_COLOR,
+    fontWeight: '700',
   },
 });

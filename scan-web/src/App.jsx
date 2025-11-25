@@ -32,6 +32,7 @@ function App() {
 
   // game fen for GamePlay component
   const [gameFen, setGameFen] = useState(null)
+  const [boardCoordinatesFlipped, setBoardCoordinatesFlipped] = useState(false)
 
   // Handle mode selection from Home page
   const handleModeSelect = (selectedMode, options = {}) => {
@@ -129,6 +130,10 @@ function App() {
   }
 
   const handleBoardDone = (finalData) => {
+    // Capture board display preferences
+    if (finalData.coordinatesFlipped !== undefined) {
+      setBoardCoordinatesFlipped(finalData.coordinatesFlipped)
+    }
     // Check if user clicked Play button
     if (finalData.action === 'play') {
       setGameFen(finalData.fen)
@@ -159,10 +164,12 @@ function App() {
       >
         <GamePlay
           initialFen={gameFen}
+          boardCoordinatesFlipped={boardCoordinatesFlipped}
           onBack={() => {
             setMode('home')
             setGameFen(null)
           }}
+          onEditBoard={() => setMode('board')}
         />
       </ErrorBoundary>
     )

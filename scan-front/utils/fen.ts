@@ -36,11 +36,26 @@ export function fenToPosition(fen: string): BoardPosition {
 export function positionToFen(
   position: BoardPosition,
   turn: PieceColor = 'w',
-  castling: string = 'KQkq',
+  castling: string | { K: boolean; Q: boolean; k: boolean; q: boolean } = 'KQkq',
   enPassant: string = '-',
   halfmove: number = 0,
   fullmove: number = 1
 ): string {
+  // Convert castling object to string if needed
+  let castlingStr = '-';
+  if (typeof castling === 'object') {
+    const rights = [];
+    if (castling.K) rights.push('K');
+    if (castling.Q) rights.push('Q');
+    if (castling.k) rights.push('k');
+    if (castling.q) rights.push('q');
+    castlingStr = rights.length > 0 ? rights.join('') : '-';
+  } else {
+    castlingStr = castling || '-';
+  }
+
+  // Normalize en passant
+  const epStr = enPassant && enPassant !== '' ? enPassant : '-';
   let fen = '';
 
   for (let rank = 7; rank >= 0; rank--) {
@@ -70,7 +85,7 @@ export function positionToFen(
     }
   }
 
-  return `${fen} ${turn} ${castling} ${enPassant} ${halfmove} ${fullmove}`;
+  return `${fen} ${turn} ${castlingStr} ${epStr} ${halfmove} ${fullmove}`;
 }
 
 /**

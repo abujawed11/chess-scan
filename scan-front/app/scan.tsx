@@ -4,12 +4,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRef, useState, useEffect } from 'react';
 import { router } from 'expo-router';
-import ImageCropper from '@/components/camera/ImageCropper';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { recognizeChessBoard } from '@/services/visionApi';
 import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
-type ScanStep = 'camera' | 'crop' | 'processing';
+type ScanStep = 'camera' | 'processing';
 
 export default function Scan() {
   const isFocused = useIsFocused();
@@ -36,10 +36,15 @@ export default function Scan() {
     if (!camRef.current) return;
     try {
       setTaking(true);
-      const picture = await camRef.current.takePictureAsync({ quality: 0.85 });
+      // Lower quality since we resize anyway - faster capture
+      const picture = await camRef.current.takePictureAsync({
+        quality: 0.7,
+        skipProcessing: false,
+      });
       if (picture?.uri) {
         setPhotoUri(picture.uri);
-        setStep('crop');
+        // Skip cropping - send full image directly to backend (like web app)
+        await handlePhotoCapture(picture.uri);
       }
     } catch (error) {
       console.error('Photo capture error:', error);
@@ -48,45 +53,59 @@ export default function Scan() {
     }
   };
 
-  const handleCropComplete = async (croppedUri: string) => {
+  const handlePhotoCapture = async (imageUri: string) => {
+    const startTime = Date.now();
+    console.log('📸 Photo captured! Starting optimization...');
+    console.log('🖼️ Original image URI:', imageUri);
+
     setStep('processing');
     try {
-      // Recognize chess position from cropped image
-      const result = await recognizeChessBoard(croppedUri);
+      // Resize image to max 1600px on longest side for faster upload and processing
+      // This matches typical web upload sizes and speeds up everything
+      const resizeStart = Date.now();
+      console.log('🔧 Resizing image for faster processing...');
+      const resizedImage = await manipulateAsync(
+        imageUri,
+        [{ resize: { width: 1600 } }], // Resize to max 1600px width (maintains aspect ratio)
+        { compress: 0.8, format: SaveFormat.JPEG }
+      );
+      const resizeTime = Date.now() - resizeStart;
+
+      console.log('✅ Image optimized in', resizeTime, 'ms');
+      console.log('🔄 Sending to backend for auto-detection...');
+
+      const uploadStart = Date.now();
+      // Send optimized image to backend for auto-detection (like web app does)
+      const result = await recognizeChessBoard(resizedImage.uri);
+      const uploadTime = Date.now() - uploadStart;
+      const totalTime = Date.now() - startTime;
+
+      console.log('✅ Recognition successful! FEN:', result.fen);
+      console.log('⏱️ Timing: Resize:', resizeTime, 'ms, Upload+Detect:', uploadTime, 'ms, Total:', totalTime, 'ms');
 
       // Navigate to board editor with recognized FEN
       router.push({
         pathname: '/board-editor',
-        params: { fen: result.fen, imageUri: croppedUri },
+        params: { fen: result.fen, imageUri: resizedImage.uri },
       });
     } catch (error) {
-      console.error('Recognition error:', error);
+      console.error('❌ Recognition error:', error);
+      alert(`Recognition failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nTip: Make sure the chessboard is clearly visible in the photo.`);
+
       // Even if recognition fails, go to board editor with default position
       router.push({
         pathname: '/board-editor',
-        params: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', imageUri: croppedUri },
+        params: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', imageUri: imageUri },
       });
     }
   };
 
-  const handleCropCancel = () => {
-    setPhotoUri(null);
-    setStep('camera');
-  };
-
   if (step === 'processing') {
-    return <LoadingSpinner message="Analyzing chess position..." />;
+    return <LoadingSpinner message="Analyzing board position..." />;
   }
 
-  if (step === 'crop' && photoUri) {
-    return (
-      <ImageCropper
-        imageUri={photoUri}
-        onCropComplete={handleCropComplete}
-        onCancel={handleCropCancel}
-      />
-    );
-  }
+  // Note: Cropping step removed - we now send full image to backend like web app
+  // Backend auto-detects the board corners using YOLO
 
   return (
     <View style={styles.container}>

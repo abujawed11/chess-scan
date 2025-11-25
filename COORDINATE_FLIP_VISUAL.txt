@@ -1,0 +1,53 @@
+COORDINATE FLIP - VISUAL DISPLAY FEATURE
+=========================================
+
+KEY INSIGHT:
+The "↔️ Coords" button is NOT a coordinate transformation!
+It's just a VISUAL PREFERENCE for where labels appear on the board.
+
+WHAT HAPPENS:
+
+                  NORMAL VIEW                FLIPPED VIEW
+                  (coordinatesFlipped=false) (coordinatesFlipped=true)
+
+     a b c d e f g h                  h g f e d c b a
+   8 [ ][ ][ ][ ][ ][ ][ ][ ] 8    [ ][ ][ ][ ][ ][ ][ ][ ]
+   7 [ ][ ][ ][ ][ ][ ][ ][ ] 7    [ ][ ][ ][ ][ ][ ][ ][ ]
+   6 [ ][ ][ ][ ][ ][ ][ ][ ] 6    [ ][ ][ ][ ][ ][ ][ ][ ]
+   5 [ ][ ][ ][ ][ ][ ][ ][ ] 5    [ ][ ][ ][ ][ ][ ][ ][ ]
+   4 [ ][ ][ ][ ][ ][ ][ ][ ] 4    [ ][ ][ ][ ][ ][ ][ ][ ]
+   3 [ ][ ][ ][ ][ ][ ][ ][ ] 3    [ ][ ][ ][ ][ ][ ][ ][ ]
+   2 [P][P][P][P][P][P][P][P] 2    [P][P][P][P][P][P][P][P]
+   1 [ ][ ][ ][ ][ ][ ][ ][ ] 1    [ ][ ][ ][ ][ ][ ][ ][ ]
+
+INTERNAL REPRESENTATION (IDENTICAL):
+pieces = {
+  a1: 'R', b1: 'N', c1: 'B', d1: 'Q', e1: 'K', f1: 'B', g1: 'N', h1: 'R',
+  a2: 'P', b2: 'P', c2: 'P', d2: 'P', e2: 'P', f2: 'P', g2: 'P', h2: 'P',
+  ...
+}
+
+FEN (IDENTICAL):
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+
+WHAT CHANGES:
+Only WHERE the coordinate LABELS are displayed on screen.
+The pieces, FEN, and data remain completely unchanged.
+
+WHEN DISPLAYING COORDINATES:
+
+Normal (coordinatesFlipped = false):
+- Rank numbers show on LEFT side, at rank 1 (bottom)
+- File letters show at BOTTOM, at file a (left)
+
+Flipped (coordinatesFlipped = true):
+- Rank numbers show on RIGHT side, at rank 8 (top)
+- File letters show at TOP, at file h (right)
+
+PERSISTENCE:
+✓ Coordinate preference stored in boardCoordinatesFlipped state
+✓ Passed to GamePlay for Analysis mode
+✓ Analysis mode displays board from same perspective
+✓ All data and FEN remain valid and correct
+
+No transformation. No remapping. Just visual preference.

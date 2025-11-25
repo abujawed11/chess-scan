@@ -1,7 +1,8 @@
 import React from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { ChessPiece as ChessPieceType } from '@/types/chess';
-import { getPieceSymbol } from '@/utils/fen';
+import { useTheme, getPieceImageUrl } from '@/context/ThemeContext';
 
 interface ChessPieceProps {
   piece: ChessPieceType;
@@ -9,15 +10,29 @@ interface ChessPieceProps {
 }
 
 export default function ChessPiece({ piece, size = 40 }: ChessPieceProps) {
+  const { pieceSet } = useTheme();
+  const imageUrl = getPieceImageUrl(piece, pieceSet.id);
+
   return (
-    <Text style={[styles.piece, { fontSize: size }]}>
-      {getPieceSymbol(piece)}
-    </Text>
+    <View style={[styles.container, { width: size, height: size }]}>
+      <Image
+        source={{ uri: imageUrl }}
+        style={styles.image}
+        contentFit="contain"
+        cachePolicy="memory-disk"
+        transition={100}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  piece: {
-    textAlign: 'center',
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
   },
 });

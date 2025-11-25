@@ -28,7 +28,10 @@
       "Bash(tree:*)",
       "Bash(mkdir:*)",
       "Bash(timeout /t 5)",
-      "Bash(\"/d/react/chess-scan/CHESS_ANALYSIS.md\")"
+      "Bash(\"/d/react/chess-scan/CHESS_ANALYSIS.md\")",
+      "Bash(ipconfig)",
+      "Bash(netsh advfirewall firewall show rule name=\"Python Backend Port 8000\")",
+      "Bash(npx expo install:*)"
     ],
     "deny": [],
     "ask": []
