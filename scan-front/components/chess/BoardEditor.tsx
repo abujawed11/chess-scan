@@ -57,9 +57,28 @@ export default function BoardEditor({ initialFen, onConfirm, onCancel }: BoardEd
   const [fenInput, setFenInput] = useState('');
   const [castlingExpanded, setCastlingExpanded] = useState(false);
 
+  // Transform position if coordinates are flipped
+  const getTransformedPosition = (pos: BoardPosition, coordsFlipped: boolean): BoardPosition => {
+    if (!coordsFlipped) return pos;
+
+    const transformed: BoardPosition = {};
+    const fileMap: Record<string, string> = { a: 'h', b: 'g', c: 'f', d: 'e', e: 'd', f: 'c', g: 'b', h: 'a' };
+    const rankMap: Record<string, string> = { '1': '8', '2': '7', '3': '6', '4': '5', '5': '4', '6': '3', '7': '2', '8': '1' };
+
+    Object.entries(pos).forEach(([square, piece]) => {
+      const file = square[0];
+      const rank = square[1];
+      const newSquare = fileMap[file] + rankMap[rank];
+      transformed[newSquare] = piece;
+    });
+
+    return transformed;
+  };
+
   const fen = useMemo(() => {
-    return positionToFen(position, turn, castling, enPassant);
-  }, [position, turn, castling, enPassant]);
+    const transformedPosition = getTransformedPosition(position, coordinatesFlipped);
+    return positionToFen(transformedPosition, turn, castling, enPassant);
+  }, [position, turn, castling, enPassant, coordinatesFlipped]);
 
   // Validate piece counts
   const validation = useMemo(() => {
