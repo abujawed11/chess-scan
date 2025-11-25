@@ -55,6 +55,7 @@ export default function BoardEditor({ initialFen, onConfirm, onCancel }: BoardEd
   const [castling, setCastling] = useState({ K: true, Q: true, k: true, q: true });
   const [enPassant, setEnPassant] = useState('');
   const [fenInput, setFenInput] = useState('');
+  const [castlingExpanded, setCastlingExpanded] = useState(false);
 
   const fen = useMemo(() => {
     return positionToFen(position, turn, castling, enPassant);
@@ -253,20 +254,95 @@ export default function BoardEditor({ initialFen, onConfirm, onCancel }: BoardEd
 
       {/* Castling Rights */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Castling Rights</Text>
-        <View style={styles.castlingRow}>
-          {(['K', 'Q', 'k', 'q'] as const).map((right) => (
-            <Pressable
-              key={right}
-              onPress={() => setCastling({ ...castling, [right]: !castling[right] })}
-              style={[styles.castlingButton, castling[right] && styles.castlingActive]}
-            >
-              <Text style={[styles.castlingText, castling[right] && styles.castlingActiveText]}>
-                {right}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <Pressable
+          onPress={() => setCastlingExpanded(!castlingExpanded)}
+          style={styles.castlingHeader}
+        >
+          <View style={styles.castlingHeaderLeft}>
+            <MaterialIcons
+              name={castlingExpanded ? "expand-less" : "expand-more"}
+              size={20}
+              color="#6b7280"
+            />
+            <Text style={styles.sectionTitle}>Castling Rights</Text>
+          </View>
+          <View style={styles.castlingPreview}>
+            {castling.K && <Image source={{ uri: getPieceImageUrl({ type: 'k', color: 'w' }, pieceSet.id) }} style={styles.castlingPreviewIcon} contentFit="contain" />}
+            {castling.Q && <Image source={{ uri: getPieceImageUrl({ type: 'q', color: 'w' }, pieceSet.id) }} style={styles.castlingPreviewIcon} contentFit="contain" />}
+            {castling.k && <Image source={{ uri: getPieceImageUrl({ type: 'k', color: 'b' }, pieceSet.id) }} style={styles.castlingPreviewIcon} contentFit="contain" />}
+            {castling.q && <Image source={{ uri: getPieceImageUrl({ type: 'q', color: 'b' }, pieceSet.id) }} style={styles.castlingPreviewIcon} contentFit="contain" />}
+          </View>
+        </Pressable>
+
+        {castlingExpanded && (
+          <View style={styles.castlingContent}>
+            {/* White Castling */}
+            <View style={styles.castlingColorSection}>
+              <Text style={styles.castlingColorTitle}>White</Text>
+              <View style={styles.castlingOptionsRow}>
+                <Pressable
+                  onPress={() => setCastling({ ...castling, K: !castling.K })}
+                  style={[styles.castlingOption, castling.K && styles.castlingOptionActive]}
+                >
+                  <Image
+                    source={{ uri: getPieceImageUrl({ type: 'k', color: 'w' }, pieceSet.id) }}
+                    style={styles.castlingIcon}
+                    contentFit="contain"
+                  />
+                  <Text style={[styles.castlingLabel, castling.K && styles.castlingLabelActive]}>
+                    King-side
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setCastling({ ...castling, Q: !castling.Q })}
+                  style={[styles.castlingOption, castling.Q && styles.castlingOptionActive]}
+                >
+                  <Image
+                    source={{ uri: getPieceImageUrl({ type: 'q', color: 'w' }, pieceSet.id) }}
+                    style={styles.castlingIcon}
+                    contentFit="contain"
+                  />
+                  <Text style={[styles.castlingLabel, castling.Q && styles.castlingLabelActive]}>
+                    Queen-side
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Black Castling */}
+            <View style={styles.castlingColorSection}>
+              <Text style={styles.castlingColorTitle}>Black</Text>
+              <View style={styles.castlingOptionsRow}>
+                <Pressable
+                  onPress={() => setCastling({ ...castling, k: !castling.k })}
+                  style={[styles.castlingOption, castling.k && styles.castlingOptionActive]}
+                >
+                  <Image
+                    source={{ uri: getPieceImageUrl({ type: 'k', color: 'b' }, pieceSet.id) }}
+                    style={styles.castlingIcon}
+                    contentFit="contain"
+                  />
+                  <Text style={[styles.castlingLabel, castling.k && styles.castlingLabelActive]}>
+                    King-side
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setCastling({ ...castling, q: !castling.q })}
+                  style={[styles.castlingOption, castling.q && styles.castlingOptionActive]}
+                >
+                  <Image
+                    source={{ uri: getPieceImageUrl({ type: 'q', color: 'b' }, pieceSet.id) }}
+                    style={styles.castlingIcon}
+                    contentFit="contain"
+                  />
+                  <Text style={[styles.castlingLabel, castling.q && styles.castlingLabelActive]}>
+                    Queen-side
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Board and Palettes */}
@@ -555,30 +631,75 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 8,
   },
-  castlingRow: {
+  castlingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  castlingHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  castlingPreview: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  castlingPreviewIcon: {
+    width: 20,
+    height: 20,
+  },
+  castlingContent: {
+    marginTop: 12,
+    gap: 12,
+  },
+  castlingColorSection: {
+    gap: 8,
+  },
+  castlingColorTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  castlingOptionsRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  castlingButton: {
+  castlingOption: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingVertical: 10,
+    paddingHorizontal: 12,
     backgroundColor: 'white',
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#e5e7eb',
-    alignItems: 'center',
   },
-  castlingActive: {
-    backgroundColor: '#8b5cf6',
-    borderColor: '#8b5cf6',
+  castlingOptionActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
   },
-  castlingText: {
-    fontSize: 16,
-    fontWeight: '700',
+  castlingIcon: {
+    width: 28,
+    height: 28,
+  },
+  castlingLabel: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#6b7280',
   },
-  castlingActiveText: {
-    color: 'white',
+  castlingLabelActive: {
+    color: '#1e40af',
   },
   boardSection: {
     flexDirection: 'column',
