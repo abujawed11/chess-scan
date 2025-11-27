@@ -1,7 +1,7 @@
 // app/analyze.tsx - Advanced Analysis Mode
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, BackHandler, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, BackHandler, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chess } from 'chess.js';
 import ChessBoard from '@/components/chess/ChessBoard';
@@ -42,7 +42,11 @@ export default function Analyze() {
   const [gameStatus, setGameStatus] = useState(() => getGameStatus(game));
   const [moves, setMoves] = useState<Move[]>([]);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
-  
+
+  // Promotion state
+  const [showPromotionDialog, setShowPromotionDialog] = useState(false);
+  const [promotionMove, setPromotionMove] = useState<{ from: string; to: string } | null>(null);
+
   // Settings
   const [flipped, setFlipped] = useState(false);
   const [autoAnalyze, setAutoAnalyze] = useState(true);
@@ -170,38 +174,65 @@ export default function Analyze() {
     }
   };
 
+  // Check if a move is a pawn promotion
+  const isPromotionMove = (from: string, to: string): boolean => {
+    const piece = position[from];
+    if (!piece || piece.type !== 'p') return false;
+
+    const toRank = to[1];
+    return (piece.color === 'w' && toRank === '8') || (piece.color === 'b' && toRank === '1');
+  };
+
+  // Execute a move with promotion handling
+  const executeMove = (from: string, to: string, promotion?: string) => {
+    try {
+      const moveResult = game.move({ from, to, promotion: promotion as any });
+      if (moveResult) {
+        const newMove: Move = {
+          from,
+          to,
+          san: moveResult.san,
+          fen: game.fen(),
+        };
+
+        setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
+        setCurrentMoveIndex(prev => prev + 1);
+        setPosition(fenToPosition(game.fen()));
+        setGameStatus(getGameStatus(game));
+        setHighlightedSquares([from, to]);
+        setSelectedSquare(null);
+        return true;
+      }
+    } catch (error) {
+      console.log('Invalid move attempted:', from, 'to', to);
+    }
+    return false;
+  };
+
+  // Handle promotion piece selection
+  const handlePromotion = (piece: 'q' | 'r' | 'b' | 'n') => {
+    if (promotionMove) {
+      executeMove(promotionMove.from, promotionMove.to, piece);
+      setShowPromotionDialog(false);
+      setPromotionMove(null);
+    }
+  };
+
   const handleSquarePress = (square: string) => {
     if (gameMode === 'analyze') {
       // In analyze mode, allow piece dragging for exploration
       if (selectedSquare) {
-        try {
-          const moveResult = game.move({ from: selectedSquare, to: square });
-          if (moveResult) {
-            const newMove: Move = {
-              from: selectedSquare,
-              to: square,
-              san: moveResult.san,
-              fen: game.fen(),
-            };
+        // Check if this is a pawn promotion
+        if (isPromotionMove(selectedSquare, square)) {
+          setPromotionMove({ from: selectedSquare, to: square });
+          setShowPromotionDialog(true);
+          return;
+        }
 
-            setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
-            setCurrentMoveIndex(prev => prev + 1);
-            setPosition(fenToPosition(game.fen()));
-            setGameStatus(getGameStatus(game));
-            setHighlightedSquares([selectedSquare, square]);
-            setSelectedSquare(null);
-          } else {
-            // Invalid move - try selecting a different piece
-            const piece = position[square];
-            if (piece && piece.color === game.turn()) {
-              setSelectedSquare(square);
-            } else {
-              setSelectedSquare(null);
-            }
-          }
-        } catch (error) {
-          // Invalid move - silently handle by trying to select the target square
-          console.log('Invalid move attempted:', selectedSquare, 'to', square);
+        // Try to execute the move
+        const success = executeMove(selectedSquare, square);
+        if (!success) {
+          // Invalid move - try selecting a different piece
           const piece = position[square];
           if (piece && piece.color === game.turn()) {
             setSelectedSquare(square);
@@ -224,34 +255,17 @@ export default function Analyze() {
 
     // Play mode logic
     if (selectedSquare) {
-      try {
-        const moveResult = game.move({ from: selectedSquare, to: square });
-        if (moveResult) {
-          const newMove: Move = {
-            from: selectedSquare,
-            to: square,
-            san: moveResult.san,
-            fen: game.fen(),
-          };
+      // Check if this is a pawn promotion
+      if (isPromotionMove(selectedSquare, square)) {
+        setPromotionMove({ from: selectedSquare, to: square });
+        setShowPromotionDialog(true);
+        return;
+      }
 
-          setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
-          setCurrentMoveIndex(prev => prev + 1);
-          setPosition(fenToPosition(game.fen()));
-          setGameStatus(getGameStatus(game));
-          setHighlightedSquares([selectedSquare, square]);
-          setSelectedSquare(null);
-        } else {
-          // Invalid move - try selecting a different piece
-          const piece = position[square];
-          if (piece && piece.color === game.turn()) {
-            setSelectedSquare(square);
-          } else {
-            setSelectedSquare(null);
-          }
-        }
-      } catch (error) {
-        // Invalid move - silently handle by trying to select the target square
-        console.log('Invalid move attempted:', selectedSquare, 'to', square);
+      // Try to execute the move
+      const success = executeMove(selectedSquare, square);
+      if (!success) {
+        // Invalid move - try selecting a different piece
         const piece = position[square];
         if (piece && piece.color === game.turn()) {
           setSelectedSquare(square);
@@ -426,10 +440,11 @@ export default function Analyze() {
                 <LoadingSpinner message="Analyzing..." size="small" />
               </View>
             )}
-          </View>
-          {isPlayerTurn && !gameStatus.isGameOver && (
+            {isPlayerTurn && !gameStatus.isGameOver && (
             <Text style={styles.turnIndicator}>Your turn</Text>
           )}
+          </View>
+          
         </View>
 
         {/* Board */}
@@ -447,6 +462,38 @@ export default function Analyze() {
             }
           />
         </View>
+
+        {/* Promotion Dialog */}
+        <Modal
+          visible={showPromotionDialog}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowPromotionDialog(false)}
+        >
+          <View style={styles.promotionOverlay}>
+            <View style={styles.promotionDialog}>
+              <Text style={styles.promotionTitle}>Promote Pawn</Text>
+              <View style={styles.promotionOptions}>
+                <Pressable style={styles.promotionButton} onPress={() => handlePromotion('q')}>
+                  <Text style={styles.promotionPiece}>♕</Text>
+                  <Text style={styles.promotionLabel}>Queen</Text>
+                </Pressable>
+                <Pressable style={styles.promotionButton} onPress={() => handlePromotion('r')}>
+                  <Text style={styles.promotionPiece}>♖</Text>
+                  <Text style={styles.promotionLabel}>Rook</Text>
+                </Pressable>
+                <Pressable style={styles.promotionButton} onPress={() => handlePromotion('b')}>
+                  <Text style={styles.promotionPiece}>♗</Text>
+                  <Text style={styles.promotionLabel}>Bishop</Text>
+                </Pressable>
+                <Pressable style={styles.promotionButton} onPress={() => handlePromotion('n')}>
+                  <Text style={styles.promotionPiece}>♘</Text>
+                  <Text style={styles.promotionLabel}>Knight</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Move Navigation */}
         <View style={styles.navigationBar}>
@@ -833,5 +880,53 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 12,
+  },
+  promotionOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promotionDialog: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  promotionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#111827',
+  },
+  promotionOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    gap: 12,
+  },
+  promotionButton: {
+    flex: 1,
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+  },
+  promotionPiece: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  promotionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
   },
 });
