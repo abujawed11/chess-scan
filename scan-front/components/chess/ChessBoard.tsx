@@ -74,8 +74,8 @@ export default function ChessBoard({
         <Defs>
           <Marker
             id="arrowhead"
-            markerWidth="4"
-            markerHeight="4"
+            markerWidth="3"
+            markerHeight="3"
             refX="3.5"
             refY="2"
             orient="auto"
@@ -98,7 +98,7 @@ export default function ChessBoard({
           const length = Math.sqrt(dx * dx + dy * dy);
 
           // Shorten arrow by 30% on each end
-          const shortenBy = BOARD_CONFIG.SQUARE_SIZE * 0.15;
+          const shortenBy = BOARD_CONFIG.SQUARE_SIZE * 0.10;
           const startX = from.x + Math.cos(angle) * shortenBy;
           const startY = from.y + Math.sin(angle) * shortenBy;
           const endX = to.x - Math.cos(angle) * shortenBy;
@@ -109,7 +109,7 @@ export default function ChessBoard({
               key={idx}
               d={`M ${startX} ${startY} L ${endX} ${endY}`}
               stroke={arrow.color || 'rgba(255, 170, 0, 0.85)'}
-              strokeWidth="8"
+              strokeWidth="6"
               strokeLinecap="round"
               markerEnd="url(#arrowhead)"
             />

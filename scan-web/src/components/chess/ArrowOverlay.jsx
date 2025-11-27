@@ -24,8 +24,8 @@ export default function ArrowOverlay({ bestMove, show }) {
       <defs>
         <marker
           id="arrowhead"
-          markerWidth="5"
-          markerHeight="5"
+          markerWidth="3"
+          markerHeight="3"
           refX="4"
           refY="2.5"
           orient="auto"
