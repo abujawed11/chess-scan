@@ -76,6 +76,13 @@ export default function Home() {
             description="Input FEN to analyze"
             onPress={() => setShowFenInput(!showFenInput)}
           />
+
+          <ModeCard
+            icon="🔍"
+            title="Backend Diagnostics"
+            description="Check backend connection"
+            onPress={() => router.push('/diagnostics')}
+          />
         </View>
 
         {/* FEN Input Section */}

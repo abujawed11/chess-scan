@@ -82,10 +82,11 @@ export default function Scan() {
 
   const handlePhotoCapture = async (imageUri: string) => {
     const startTime = Date.now();
-    console.log('📸 Photo received! Starting analysis...');
+    console.log('📸 Photo received! Starting board detection...');
     console.log('🖼️ Original Image URI:', imageUri);
 
     setStep('processing');
+    
     try {
       console.log('🔄 Preparing image for backend...');
 
@@ -98,30 +99,59 @@ export default function Scan() {
       );
 
       console.log('✅ Image resized:', resizedImage.uri);
-      console.log('📤 Sending to backend for auto-detection...');
+      console.log('📤 Sending to backend for board detection...');
 
       const uploadStart = Date.now();
       const result = await recognizeChessBoard(resizedImage.uri);
       const uploadTime = Date.now() - uploadStart;
       const totalTime = Date.now() - startTime;
 
-      console.log('✅ Recognition successful! FEN:', result.fen);
+      console.log('✅ Board detection successful!');
       console.log('⏱️ Timing: Upload+Detect:', uploadTime, 'ms, Total:', totalTime, 'ms');
-
-      // Navigate to board editor with recognized FEN
-      router.push({
-        pathname: '/board-editor',
-        params: { fen: result.fen, imageUri: resizedImage.uri },
+      console.log('📊 Result:', { 
+        fen: result.fen, 
+        hasDebugImage: !!result.debugImage,
+        hasBoardCorners: !!result.boardCorners 
       });
+
+      // Navigate to board preview screen to show detected board
+      console.log('🔀 Navigating to board-preview...');
+      console.log('📦 Navigation params:', {
+        hasImageUri: !!resizedImage.uri,
+        debugImageSize: result.debugImage ? `${(result.debugImage.length / 1024).toFixed(1)} KB` : 'none',
+        hasBoardCorners: !!result.boardCorners,
+        fen: result.fen,
+      });
+
+      // Note: We don't pass debugImage through params because base64 images can be
+      // too large for Expo Router navigation params (can cause "Failed to parse URL" errors)
+      // Just show the original resized image instead
+      router.replace({
+        pathname: '/board-preview',
+        params: { 
+          imageUri: resizedImage.uri,
+          boardCorners: result.boardCorners ? JSON.stringify(result.boardCorners) : '',
+          fen: result.fen, // Store FEN for later use
+        },
+      });
+      
+      console.log('✅ Navigation initiated');
     } catch (error) {
-      console.error('❌ Recognition error:', error);
-      alert(`Recognition failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nTip: Make sure the chessboard is clearly visible.`);
-
-      // Even if recognition fails, go to board editor with default position
-      router.push({
-        pathname: '/board-editor',
-        params: { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', imageUri: imageUri },
-      });
+      console.error('❌ Board detection error:', error);
+      
+      // Log detailed error info
+      if (error instanceof Error) {
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+      
+      // Reset state first
+      setStep('camera');
+      setPhotoUri(null);
+      
+      // Then show alert
+      alert(`Board detection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try taking another photo with the board clearly visible.`);
     }
   };
 
