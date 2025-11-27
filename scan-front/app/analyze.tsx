@@ -70,23 +70,25 @@ export default function Analyze() {
     }
   }, [game.fen(), autoAnalyze]);
 
+  // Update highlighted squares when showBestMove toggle changes
+  useEffect(() => {
+    if (showBestMove && bestMove && bestMove.length >= 4) {
+      const from = bestMove.substring(0, 2);
+      const to = bestMove.substring(2, 4);
+      setHighlightedSquares([from, to]);
+    } else {
+      setHighlightedSquares([]);
+    }
+  }, [showBestMove, bestMove]);
+
   const analyzePosition = async () => {
     if (gameStatus.isGameOver) return;
-    
+
     setLoading(true);
     try {
       const result = await getBestMove(game.fen(), analysisDepth);
       setBestMove(result.bestMove);
       setEvaluation(result.evaluation);
-
-      // Highlight best move if enabled
-      if (showBestMove && result.bestMove.length >= 4) {
-        const from = result.bestMove.substring(0, 2);
-        const to = result.bestMove.substring(2, 4);
-        setHighlightedSquares([from, to]);
-      } else {
-        setHighlightedSquares([]);
-      }
 
       // Store engine lines (simplified for mobile)
       if (result.pv && result.pv.length > 0) {
@@ -129,7 +131,7 @@ export default function Analyze() {
 
   const makeEngineMove = async () => {
     if (gameStatus.isGameOver) return;
-    
+
     setLoading(true);
     try {
       const result = await getBestMove(game.fen(), analysisDepth);
@@ -139,22 +141,26 @@ export default function Analyze() {
         const to = result.bestMove.substring(2, 4);
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        const moveResult = game.move({ from, to });
-        if (moveResult) {
-          const newMove: Move = {
-            from,
-            to,
-            san: moveResult.san,
-            fen: game.fen(),
-            evaluation: result.evaluation,
-            bestMove: result.bestMove
-          };
+        try {
+          const moveResult = game.move({ from, to });
+          if (moveResult) {
+            const newMove: Move = {
+              from,
+              to,
+              san: moveResult.san,
+              fen: game.fen(),
+              evaluation: result.evaluation,
+              bestMove: result.bestMove
+            };
 
-          setMoves(prev => [...prev, newMove]);
-          setCurrentMoveIndex(prev => prev + 1);
-          setPosition(fenToPosition(game.fen()));
-          setGameStatus(getGameStatus(game));
-          setHighlightedSquares([from, to]);
+            setMoves(prev => [...prev, newMove]);
+            setCurrentMoveIndex(prev => prev + 1);
+            setPosition(fenToPosition(game.fen()));
+            setGameStatus(getGameStatus(game));
+            setHighlightedSquares([from, to]);
+          }
+        } catch (moveError) {
+          console.error('Invalid engine move:', moveError);
         }
       }
     } catch (error) {
@@ -168,22 +174,34 @@ export default function Analyze() {
     if (gameMode === 'analyze') {
       // In analyze mode, allow piece dragging for exploration
       if (selectedSquare) {
-        const moveResult = game.move({ from: selectedSquare, to: square });
-        if (moveResult) {
-          const newMove: Move = {
-            from: selectedSquare,
-            to: square,
-            san: moveResult.san,
-            fen: game.fen(),
-          };
-          
-          setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
-          setCurrentMoveIndex(prev => prev + 1);
-          setPosition(fenToPosition(game.fen()));
-          setGameStatus(getGameStatus(game));
-          setHighlightedSquares([selectedSquare, square]);
-          setSelectedSquare(null);
-        } else {
+        try {
+          const moveResult = game.move({ from: selectedSquare, to: square });
+          if (moveResult) {
+            const newMove: Move = {
+              from: selectedSquare,
+              to: square,
+              san: moveResult.san,
+              fen: game.fen(),
+            };
+
+            setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
+            setCurrentMoveIndex(prev => prev + 1);
+            setPosition(fenToPosition(game.fen()));
+            setGameStatus(getGameStatus(game));
+            setHighlightedSquares([selectedSquare, square]);
+            setSelectedSquare(null);
+          } else {
+            // Invalid move - try selecting a different piece
+            const piece = position[square];
+            if (piece && piece.color === game.turn()) {
+              setSelectedSquare(square);
+            } else {
+              setSelectedSquare(null);
+            }
+          }
+        } catch (error) {
+          // Invalid move - silently handle by trying to select the target square
+          console.log('Invalid move attempted:', selectedSquare, 'to', square);
           const piece = position[square];
           if (piece && piece.color === game.turn()) {
             setSelectedSquare(square);
@@ -206,22 +224,34 @@ export default function Analyze() {
 
     // Play mode logic
     if (selectedSquare) {
-      const moveResult = game.move({ from: selectedSquare, to: square });
-      if (moveResult) {
-        const newMove: Move = {
-          from: selectedSquare,
-          to: square,
-          san: moveResult.san,
-          fen: game.fen(),
-        };
-        
-        setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
-        setCurrentMoveIndex(prev => prev + 1);
-        setPosition(fenToPosition(game.fen()));
-        setGameStatus(getGameStatus(game));
-        setHighlightedSquares([selectedSquare, square]);
-        setSelectedSquare(null);
-      } else {
+      try {
+        const moveResult = game.move({ from: selectedSquare, to: square });
+        if (moveResult) {
+          const newMove: Move = {
+            from: selectedSquare,
+            to: square,
+            san: moveResult.san,
+            fen: game.fen(),
+          };
+
+          setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
+          setCurrentMoveIndex(prev => prev + 1);
+          setPosition(fenToPosition(game.fen()));
+          setGameStatus(getGameStatus(game));
+          setHighlightedSquares([selectedSquare, square]);
+          setSelectedSquare(null);
+        } else {
+          // Invalid move - try selecting a different piece
+          const piece = position[square];
+          if (piece && piece.color === game.turn()) {
+            setSelectedSquare(square);
+          } else {
+            setSelectedSquare(null);
+          }
+        }
+      } catch (error) {
+        // Invalid move - silently handle by trying to select the target square
+        console.log('Invalid move attempted:', selectedSquare, 'to', square);
         const piece = position[square];
         if (piece && piece.color === game.turn()) {
           setSelectedSquare(square);
@@ -241,11 +271,16 @@ export default function Analyze() {
     if (index < -1 || index >= moves.length) return;
 
     const newGame = createChessGame(initialFen);
-    
+
     if (index >= 0) {
-      for (let i = 0; i <= index; i++) {
-        const move = moves[i];
-        newGame.move({ from: move.from, to: move.to });
+      try {
+        for (let i = 0; i <= index; i++) {
+          const move = moves[i];
+          newGame.move({ from: move.from, to: move.to });
+        }
+      } catch (error) {
+        console.error('Error replaying moves:', error);
+        return;
       }
     }
 
@@ -253,7 +288,7 @@ export default function Analyze() {
     setPosition(fenToPosition(newGame.fen()));
     setGameStatus(getGameStatus(newGame));
     setCurrentMoveIndex(index);
-    
+
     if (index >= 0) {
       setHighlightedSquares([moves[index].from, moves[index].to]);
       setEvaluation(moves[index].evaluation || null);
@@ -285,24 +320,29 @@ export default function Analyze() {
     const from = bestMove.substring(0, 2);
     const to = bestMove.substring(2, 4);
 
-    const moveResult = game.move({ from, to });
-    if (moveResult) {
-      const newMove: Move = {
-        from,
-        to,
-        san: moveResult.san,
-        fen: game.fen(),
-        evaluation,
-        bestMove
-      };
-      
-      setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
-      setCurrentMoveIndex(prev => prev + 1);
-      setPosition(fenToPosition(game.fen()));
-      setGameStatus(getGameStatus(game));
-      setHighlightedSquares([from, to]);
-      setBestMove(null);
-      setEvaluation(null);
+    try {
+      const moveResult = game.move({ from, to });
+      if (moveResult) {
+        const newMove: Move = {
+          from,
+          to,
+          san: moveResult.san,
+          fen: game.fen(),
+          evaluation,
+          bestMove
+        };
+
+        setMoves(prev => [...prev.slice(0, currentMoveIndex + 1), newMove]);
+        setCurrentMoveIndex(prev => prev + 1);
+        setPosition(fenToPosition(game.fen()));
+        setGameStatus(getGameStatus(game));
+        setHighlightedSquares([from, to]);
+        setBestMove(null);
+        setEvaluation(null);
+      }
+    } catch (error) {
+      console.error('Failed to make best move:', error);
+      Alert.alert('Invalid Move', 'The suggested move is not valid in the current position.');
     }
   };
 
@@ -393,6 +433,11 @@ export default function Analyze() {
             onSquarePress={handleSquarePress}
             selectedSquare={selectedSquare}
             highlightedSquares={highlightedSquares}
+            arrows={
+              autoAnalyze && bestMove && bestMove.length >= 4
+                ? [{ from: bestMove.substring(0, 2), to: bestMove.substring(2, 4) }]
+                : []
+            }
           />
         </View>
 

@@ -1,9 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import Svg, { Defs, Marker, Path, Polygon } from 'react-native-svg';
 import { BoardPosition } from '@/types/chess';
 import { BOARD_CONFIG } from '@/constants/config';
 import { useTheme } from '@/context/ThemeContext';
 import ChessPiece from './ChessPiece';
+
+interface Arrow {
+  from: string;
+  to: string;
+  color?: string;
+}
 
 interface ChessBoardProps {
   position: BoardPosition;
@@ -12,6 +19,7 @@ interface ChessBoardProps {
   onSquarePress?: (square: string) => void;
   highlightedSquares?: string[];
   selectedSquare?: string | null;
+  arrows?: Arrow[];
 }
 
 export default function ChessBoard({
@@ -21,6 +29,7 @@ export default function ChessBoard({
   onSquarePress,
   highlightedSquares = [],
   selectedSquare = null,
+  arrows = [],
 }: ChessBoardProps) {
   const { boardColors } = useTheme();
   const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -34,6 +43,81 @@ export default function ChessBoard({
   // Create separate arrays for coordinate labels AFTER board flip
   const displayFiles = coordinatesFlipped ? [...files].reverse() : files;
   const displayRanks = coordinatesFlipped ? [...ranks].reverse() : ranks;
+
+  // Calculate square position for arrows
+  const getSquarePosition = (square: string) => {
+    const file = square[0];
+    const rank = square[1];
+    const fileIndex = files.indexOf(file);
+    const rankIndex = ranks.indexOf(rank);
+
+    // Calculate center position of the square
+    const x = fileIndex * BOARD_CONFIG.SQUARE_SIZE + BOARD_CONFIG.SQUARE_SIZE / 2;
+    const y = rankIndex * BOARD_CONFIG.SQUARE_SIZE + BOARD_CONFIG.SQUARE_SIZE / 2;
+
+    return { x, y };
+  };
+
+  // Render arrows
+  const renderArrows = () => {
+    if (arrows.length === 0) return null;
+
+    const boardSize = BOARD_CONFIG.SQUARE_SIZE * 8;
+
+    return (
+      <Svg
+        style={StyleSheet.absoluteFill}
+        width={boardSize}
+        height={boardSize}
+        pointerEvents="none"
+      >
+        <Defs>
+          <Marker
+            id="arrowhead"
+            markerWidth="4"
+            markerHeight="4"
+            refX="3.5"
+            refY="2"
+            orient="auto"
+            markerUnits="strokeWidth"
+          >
+            <Polygon
+              points="0 0, 4 2, 0 4"
+              fill="rgba(255, 170, 0, 0.85)"
+            />
+          </Marker>
+        </Defs>
+        {arrows.map((arrow, idx) => {
+          const from = getSquarePosition(arrow.from);
+          const to = getSquarePosition(arrow.to);
+
+          // Calculate angle and shorten the arrow so it doesn't cover the piece
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const angle = Math.atan2(dy, dx);
+          const length = Math.sqrt(dx * dx + dy * dy);
+
+          // Shorten arrow by 30% on each end
+          const shortenBy = BOARD_CONFIG.SQUARE_SIZE * 0.15;
+          const startX = from.x + Math.cos(angle) * shortenBy;
+          const startY = from.y + Math.sin(angle) * shortenBy;
+          const endX = to.x - Math.cos(angle) * shortenBy;
+          const endY = to.y - Math.sin(angle) * shortenBy;
+
+          return (
+            <Path
+              key={idx}
+              d={`M ${startX} ${startY} L ${endX} ${endY}`}
+              stroke={arrow.color || 'rgba(255, 170, 0, 0.85)'}
+              strokeWidth="8"
+              strokeLinecap="round"
+              markerEnd="url(#arrowhead)"
+            />
+          );
+        })}
+      </Svg>
+    );
+  };
 
   const renderSquare = (file: string, rank: string) => {
     const square = `${file}${rank}`;
@@ -79,19 +163,25 @@ export default function ChessBoard({
   };
 
   return (
-    <View style={styles.board}>
-      {ranks.map((rank) => (
-        <View key={rank} style={styles.row}>
-          {files.map((file) => renderSquare(file, rank))}
-        </View>
-      ))}
+    <View style={styles.boardContainer}>
+      <View style={styles.board}>
+        {ranks.map((rank) => (
+          <View key={rank} style={styles.row}>
+            {files.map((file) => renderSquare(file, rank))}
+          </View>
+        ))}
+      </View>
+      {renderArrows()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  board: {
+  boardContainer: {
+    position: 'relative',
     alignSelf: 'center',
+  },
+  board: {
     borderWidth: 2,
     borderColor: '#2d2d2d',
     borderRadius: 4,
