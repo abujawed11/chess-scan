@@ -31,7 +31,8 @@
       "Bash(\"/d/react/chess-scan/CHESS_ANALYSIS.md\")",
       "Bash(ipconfig)",
       "Bash(netsh advfirewall firewall show rule name=\"Python Backend Port 8000\")",
-      "Bash(npx expo install:*)"
+      "Bash(npx expo install:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []

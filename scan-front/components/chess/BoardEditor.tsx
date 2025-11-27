@@ -14,7 +14,7 @@ import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { manipulateAsync, FlipType, SaveFormat } from 'expo-image-manipulator';
 import { BoardPosition, ChessPiece, PieceType, PieceColor } from '@/types/chess';
-import { fenToPosition, positionToFen } from '@/utils/fen';
+import { fenToPosition, positionToFen, inferCastlingRights, validateAndFixSide } from '@/utils/fen';
 import { useTheme, getPieceImageUrl } from '@/context/ThemeContext';
 import ChessBoard from './ChessBoard';
 import Button from '../ui/Button';
@@ -180,10 +180,11 @@ export default function BoardEditor({
   const [turn, setTurn] = useState<PieceColor>('w');
   const [flipped, setFlipped] = useState(false);
   const [coordinatesFlipped, setCoordinatesFlipped] = useState(false);
-  const [castling, setCastling] = useState({ K: true, Q: true, k: true, q: true });
+  const [castling, setCastling] = useState({ K: false, Q: false, k: false, q: false });
   const [enPassant, setEnPassant] = useState('');
   const [fenInput, setFenInput] = useState('');
   const [castlingExpanded, setCastlingExpanded] = useState(false);
+  const [sideWarning, setSideWarning] = useState<string | null>(null);
 
   // Transform position if coordinates are flipped
   const getTransformedPosition = (pos: BoardPosition, coordsFlipped: boolean): BoardPosition => {
@@ -203,10 +204,39 @@ export default function BoardEditor({
     return transformed;
   };
 
+  // Auto-infer castling rights when position changes
+  useEffect(() => {
+    const transformedPosition = getTransformedPosition(position, coordinatesFlipped);
+    const inferred = inferCastlingRights(transformedPosition);
+
+    // Update castling state to match inferred rights
+    setCastling(inferred);
+  }, [position, coordinatesFlipped]);
+
   const fen = useMemo(() => {
     const transformedPosition = getTransformedPosition(position, coordinatesFlipped);
     return positionToFen(transformedPosition, turn, castling, enPassant);
   }, [position, turn, castling, enPassant, coordinatesFlipped]);
+
+  // Validate FEN and auto-correct turn if needed
+  useEffect(() => {
+    const result = validateAndFixSide(fen);
+
+    // If side was auto-corrected, update the turn state
+    if (result.sideChanged && result.correctedSide) {
+      setSideWarning(result.reason || 'Turn auto-corrected');
+      // Auto-correct the turn after a brief moment
+      setTimeout(() => {
+        setTurn(result.correctedSide!);
+        setTimeout(() => setSideWarning(null), 3000); // Clear warning after 3s
+      }, 100);
+    } else if (!result.valid) {
+      // Show validation error but don't auto-correct
+      setSideWarning(result.reason || null);
+    } else {
+      setSideWarning(null);
+    }
+  }, [fen]);
 
   // Validate piece counts
   const validation = useMemo(() => {
@@ -410,6 +440,17 @@ export default function BoardEditor({
         </View>
       )}
 
+      {/* Side Auto-Correction Warning */}
+      {sideWarning && (
+        <View style={styles.warningBox}>
+          <MaterialIcons name="info" size={20} color="#92400e" />
+          <View style={styles.errorContent}>
+            <Text style={styles.warningTitle}>Auto-corrected:</Text>
+            <Text style={styles.warningText}>{sideWarning}</Text>
+          </View>
+        </View>
+      )}
+
       {/* Validation Errors */}
       {validation.errors.length > 0 && (
         <View style={styles.errorBox}>
@@ -433,7 +474,7 @@ export default function BoardEditor({
             <ToolButton onPress={handleFlipCoordinates} icon="swap-vert">
               Flip Coords
             </ToolButton>
-            <ToolButton onPress={handleReset} icon="restart">
+            <ToolButton onPress={handleReset} icon="replay">
               Reset
             </ToolButton>
             <ToolButton onPress={handleClear} icon="delete" color="#ef4444">
@@ -768,6 +809,26 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 8,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#fef3c7',
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  warningTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  warningText: {
+    fontSize: 13,
+    color: '#92400e',
   },
   errorBox: {
     flexDirection: 'row',

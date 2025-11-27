@@ -2,6 +2,7 @@
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, BackHandler, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chess } from 'chess.js';
 import ChessBoard from '@/components/chess/ChessBoard';
 import Button from '@/components/ui/Button';
@@ -329,7 +330,7 @@ export default function Analyze() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Settings Bar */}
       <View style={styles.settingsBar}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.settingsScroll}>
@@ -532,7 +533,7 @@ export default function Analyze() {
           <Button title="Back" onPress={() => router.back()} variant="outline" style={{ flex: 1 }} />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -545,21 +546,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
   },
   settingsScroll: {
     paddingHorizontal: 12,
-    gap: 8,
+    gap: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },
   settingToggle: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#d1d5db',
+    minHeight: 36,
+    justifyContent: 'center',
   },
   settingActive: {
     backgroundColor: '#3b82f6',
@@ -576,8 +580,13 @@ const styles = StyleSheet.create({
   depthSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
   },
   depthLabel: {
     fontSize: 12,
@@ -586,19 +595,21 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   depthButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#fff',
+    backgroundColor: '#f3f4f6',
     borderWidth: 1,
     borderColor: '#d1d5db',
+    minWidth: 32,
+    alignItems: 'center',
   },
   depthActive: {
     backgroundColor: '#10b981',
     borderColor: '#10b981',
   },
   depthText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: '#374151',
   },
