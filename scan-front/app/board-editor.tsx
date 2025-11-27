@@ -8,8 +8,13 @@ import Button from '@/components/ui/Button';
 import ThemeSelector from '@/components/ui/ThemeSelector';
 
 export default function BoardEditorScreen() {
-  const { fen, imageUri } = useLocalSearchParams<{ fen?: string; imageUri?: string }>();
-  const [showEditor, setShowEditor] = useState(false);
+  const { fen, imageUri, boardCorners, autoEdit } = useLocalSearchParams<{ 
+    fen?: string; 
+    imageUri?: string;
+    boardCorners?: string;
+    autoEdit?: string;
+  }>();
+  const [showEditor, setShowEditor] = useState(autoEdit === 'true'); // Auto-show editor if autoEdit is true
   const [editedFen, setEditedFen] = useState(fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
 
@@ -57,11 +62,28 @@ export default function BoardEditorScreen() {
   };
 
   if (showEditor) {
+    // Parse boardCorners if it's a string
+    let parsedCorners: [[number, number], [number, number], [number, number], [number, number]] | undefined;
+    if (boardCorners) {
+      try {
+        if (typeof boardCorners === 'string') {
+          parsedCorners = JSON.parse(boardCorners);
+        } else {
+          parsedCorners = boardCorners;
+        }
+      } catch (e) {
+        console.error('Failed to parse boardCorners:', e);
+        parsedCorners = undefined;
+      }
+    }
+
     return (
       <BoardEditor
         initialFen={editedFen}
         onConfirm={handleEditComplete}
         onCancel={() => setShowEditor(false)}
+        referenceImageUri={imageUri}
+        boardCorners={parsedCorners}
       />
     );
   }

@@ -36,11 +36,14 @@ export default function BoardPreview() {
     console.log('♟️ Using FEN:', fen);
 
     // Navigate to board editor with the detected FEN
+    // autoEdit=true will skip "Position Recognized" screen and go directly to editing
     router.replace({
       pathname: '/board-editor',
       params: { 
         fen: fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 
-        imageUri: imageUri 
+        imageUri: imageUri,
+        boardCorners: boardCorners || '',
+        autoEdit: 'true', // Skip preview, go directly to editor
       },
     });
   };

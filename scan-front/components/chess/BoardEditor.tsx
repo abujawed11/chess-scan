@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { manipulateAsync, FlipType, SaveFormat } from 'expo-image-manipulator';
 import { BoardPosition, ChessPiece, PieceType, PieceColor } from '@/types/chess';
 import { fenToPosition, positionToFen } from '@/utils/fen';
 import { useTheme, getPieceImageUrl } from '@/context/ThemeContext';
@@ -24,6 +25,8 @@ interface BoardEditorProps {
   initialFen: string;
   onConfirm: (fen: string) => void;
   onCancel: () => void;
+  referenceImageUri?: string;
+  boardCorners?: [[number, number], [number, number], [number, number], [number, number]] | string;
 }
 
 const WHITE_PIECES: ChessPiece[] = [
@@ -44,10 +47,135 @@ const BLACK_PIECES: ChessPiece[] = [
   { type: 'p', color: 'b' },
 ];
 
-export default function BoardEditor({ initialFen, onConfirm, onCancel }: BoardEditorProps) {
+export default function BoardEditor({ 
+  initialFen, 
+  onConfirm, 
+  onCancel,
+  referenceImageUri,
+  boardCorners 
+}: BoardEditorProps) {
   const { pieceSet } = useTheme();
   const [position, setPosition] = useState<BoardPosition>(() => fenToPosition(initialFen));
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+  const [showReferenceImage, setShowReferenceImage] = useState(true); // Show image by default
+  const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
+  const [processingImage, setProcessingImage] = useState(false);
+
+  // Auto-crop the image based on board corners when component mounts
+  useEffect(() => {
+    const cropImage = async () => {
+      if (!referenceImageUri) {
+        setCroppedImageUri(null);
+        return;
+      }
+
+      // If no board corners, just use the original image
+      if (!boardCorners) {
+        setCroppedImageUri(referenceImageUri);
+        return;
+      }
+
+      try {
+        setProcessingImage(true);
+        console.log('🔲 Cropping image based on board corners...');
+        console.log('📦 Raw boardCorners:', boardCorners);
+
+        // Parse boardCorners - it might be a string (from navigation params) or already parsed
+        let corners: [[number, number], [number, number], [number, number], [number, number]];
+        if (typeof boardCorners === 'string') {
+          try {
+            const parsed = JSON.parse(boardCorners);
+            // Handle case where it might be double-stringified
+            if (typeof parsed === 'string') {
+              corners = JSON.parse(parsed);
+            } else {
+              corners = parsed;
+            }
+          } catch (e) {
+            console.error('❌ Failed to parse boardCorners JSON:', e);
+            console.error('Raw boardCorners:', boardCorners);
+            setCroppedImageUri(referenceImageUri);
+            return;
+          }
+        } else {
+          corners = boardCorners;
+        }
+
+        // Validate corners format
+        if (!Array.isArray(corners) || corners.length !== 4) {
+          console.warn('⚠️ Invalid boardCorners format:', corners);
+          setCroppedImageUri(referenceImageUri);
+          return;
+        }
+
+        // Validate each corner is a valid [x, y] pair
+        for (let i = 0; i < corners.length; i++) {
+          const corner = corners[i];
+          if (!Array.isArray(corner) || corner.length !== 2) {
+            console.warn(`⚠️ Invalid corner at index ${i}:`, corner);
+            setCroppedImageUri(referenceImageUri);
+            return;
+          }
+          if (typeof corner[0] !== 'number' || typeof corner[1] !== 'number' || 
+              isNaN(corner[0]) || isNaN(corner[1])) {
+            console.warn(`⚠️ Invalid corner coordinates at index ${i}:`, corner);
+            setCroppedImageUri(referenceImageUri);
+            return;
+          }
+        }
+
+        // boardCorners format: [[x, y], [x, y], [x, y], [x, y]]
+        // Extract x and y coordinates from all 4 corners
+        const xs = corners.map(corner => corner[0]);
+        const ys = corners.map(corner => corner[1]);
+
+        const minX = Math.max(0, Math.min(...xs));
+        const maxX = Math.max(...xs);
+        const minY = Math.max(0, Math.min(...ys));
+        const maxY = Math.max(...ys);
+
+        const width = Math.max(1, maxX - minX);
+        const height = Math.max(1, maxY - minY);
+
+        console.log('📐 Crop region:', { minX, minY, width, height });
+        console.log('📐 Corners:', JSON.stringify(corners, null, 2));
+
+        // Validate crop dimensions are reasonable
+        if (width < 10 || height < 10) {
+          console.warn('⚠️ Crop region too small, using original image');
+          setCroppedImageUri(referenceImageUri);
+          return;
+        }
+
+        // Crop the image to the detected board region
+        const result = await manipulateAsync(
+          referenceImageUri,
+          [
+            {
+              crop: {
+                originX: Math.round(minX),
+                originY: Math.round(minY),
+                width: Math.round(width),
+                height: Math.round(height),
+              },
+            },
+          ],
+          { compress: 0.9, format: SaveFormat.JPEG }
+        );
+
+        console.log('✅ Image cropped successfully:', result.uri);
+        setCroppedImageUri(result.uri);
+      } catch (error) {
+        console.error('❌ Error cropping image:', error);
+        // Fallback to original image
+        setCroppedImageUri(referenceImageUri);
+      } finally {
+        setProcessingImage(false);
+      }
+    };
+
+    cropImage();
+  }, [referenceImageUri, boardCorners]);
   const [selectedPiece, setSelectedPiece] = useState<ChessPiece | null>(null);
   const [turn, setTurn] = useState<PieceColor>('w');
   const [flipped, setFlipped] = useState(false);
@@ -234,6 +362,53 @@ export default function BoardEditor({ initialFen, onConfirm, onCancel }: BoardEd
           </Pressable>
         </View>
       </View>
+
+      {/* Reference Image Preview */}
+      {referenceImageUri && (
+        <View style={styles.referenceImageSection}>
+          <Pressable
+            onPress={() => setShowReferenceImage(!showReferenceImage)}
+            style={styles.referenceImageHeader}
+          >
+            <View style={styles.referenceImageHeaderLeft}>
+              <MaterialIcons
+                name={showReferenceImage ? "expand-less" : "expand-more"}
+                size={20}
+                color="#6b7280"
+              />
+              <Text style={styles.referenceImageTitle}>
+                📸 {boardCorners ? 'Detected Board' : 'Original Photo'}
+              </Text>
+            </View>
+            <Text style={styles.referenceImageHint}>
+              {showReferenceImage ? 'Tap to hide' : 'Tap to show'}
+            </Text>
+          </Pressable>
+          {showReferenceImage && (
+            <View style={styles.referenceImageContainer}>
+              {processingImage ? (
+                <View style={[styles.referenceImage, styles.processingContainer]}>
+                  <MaterialIcons name="hourglass-empty" size={32} color="#9ca3af" />
+                  <Text style={styles.processingText}>Cropping image...</Text>
+                </View>
+              ) : croppedImageUri ? (
+                <>
+                  <Image
+                    source={{ uri: croppedImageUri }}
+                    style={styles.referenceImage}
+                    contentFit="contain"
+                  />
+                  <Text style={styles.referenceImageCaption}>
+                    {boardCorners 
+                      ? '✨ Auto-cropped to detected board • Use as reference to fix errors'
+                      : 'Use this reference to correct any detection errors'}
+                  </Text>
+                </>
+              ) : null}
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Validation Errors */}
       {validation.errors.length > 0 && (
@@ -892,5 +1067,61 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 12,
+  },
+  referenceImageSection: {
+    marginBottom: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  referenceImageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  referenceImageHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  referenceImageTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  referenceImageHint: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  referenceImageContainer: {
+    padding: 12,
+  },
+  referenceImage: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 8,
+  },
+  referenceImageCaption: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  processingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  processingText: {
+    fontSize: 13,
+    color: '#9ca3af',
   },
 });
