@@ -6,10 +6,79 @@ import axios from 'axios';
 import { API_CONFIG, CHESS_CONFIG } from '@/constants/config';
 import { AnalysisResult, Move, GameMode } from '@/types/chess';
 
+// Engine initialization state
+let engineInitialized = false;
+let engineInitializing = false;
+
 // Debug: Log configuration when module loads
 console.log('♟️ Chess Engine Module Loaded');
 console.log('🔗 CHESS_ENGINE_URL:', API_CONFIG.CHESS_ENGINE_URL);
 console.log('⚙️ Engine Depth:', CHESS_CONFIG.ENGINE_DEPTH);
+
+/**
+ * Initialize the backend Stockfish engine
+ * This should be called once at app startup
+ */
+export async function initializeEngine(): Promise<boolean> {
+  if (engineInitialized) {
+    console.log('✅ Engine already initialized');
+    return true;
+  }
+
+  if (engineInitializing) {
+    console.log('⏳ Engine initialization already in progress');
+    // Wait for initialization to complete
+    let attempts = 0;
+    while (engineInitializing && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      attempts++;
+    }
+    return engineInitialized;
+  }
+
+  engineInitializing = true;
+  console.log('🚀 Initializing backend Stockfish engine...');
+
+  try {
+    const response = await axios.post(
+      `${API_CONFIG.CHESS_ENGINE_URL}/start_engine`,
+      {},
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000, // 10 second timeout for engine startup
+      }
+    );
+
+    console.log('📡 Engine initialization response:', response.data);
+
+    if (response.data.status === 'started' || response.data.status === 'already_running') {
+      engineInitialized = true;
+      console.log('✅ Backend Stockfish initialized successfully');
+      console.log(`  🔧 Engine: ${response.data.engine_path || 'Native Stockfish'}`);
+      return true;
+    } else {
+      throw new Error(response.data.message || 'Failed to start engine');
+    }
+  } catch (error) {
+    console.error('❌ Engine initialization failed:', error);
+    
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNREFUSED') {
+        console.error('🔌 Cannot connect to backend. Is the server running at', API_CONFIG.CHESS_ENGINE_URL, '?');
+      } else if (error.code === 'ETIMEDOUT') {
+        console.error('⏱️ Engine initialization timed out');
+      } else {
+        console.error('📄 Response:', error.response?.data);
+      }
+    }
+    
+    return false;
+  } finally {
+    engineInitializing = false;
+  }
+}
 
 /**
  * Initialize a new chess game from FEN
@@ -77,6 +146,15 @@ export async function getBestMove(fen: string, depth: number = CHESS_CONFIG.ENGI
   console.log('🔗 Backend URL:', API_CONFIG.CHESS_ENGINE_URL);
 
   try {
+    // Ensure engine is initialized before analyzing
+    if (!engineInitialized) {
+      console.log('⚠️ Engine not initialized, initializing now...');
+      const initialized = await initializeEngine();
+      if (!initialized) {
+        throw new Error('Failed to initialize chess engine. Please check backend connection.');
+      }
+    }
+
     const formData = new FormData();
     formData.append('fen', fen);
     formData.append('depth', depth.toString());
@@ -97,6 +175,12 @@ export async function getBestMove(fen: string, depth: number = CHESS_CONFIG.ENGI
 
     console.log('✅ Analysis response received!');
     console.log('📊 Full response:', JSON.stringify(response.data, null, 2));
+
+    // Check if we got a valid response
+    if (!response.data.bestMove) {
+      console.error('❌ No bestMove in response:', response.data);
+      throw new Error('Engine returned no best move. Response: ' + JSON.stringify(response.data));
+    }
 
     // Convert backend format to mobile app format
     const evaluation = response.data.evaluation;
@@ -129,15 +213,19 @@ export async function getBestMove(fen: string, depth: number = CHESS_CONFIG.ENGI
 
       // Check if it's a network issue
       if (error.code === 'ECONNREFUSED') {
-        throw new Error('Cannot connect to chess engine backend. Is the server running?');
+        throw new Error('Cannot connect to chess engine backend. Is the server running at ' + API_CONFIG.CHESS_ENGINE_URL + '?');
       }
 
       if (error.code === 'ETIMEDOUT') {
         throw new Error('Chess engine request timed out. Check your connection.');
       }
 
+      if (error.response?.data?.error === 'NO_RESULTS') {
+        throw new Error('Engine returned no analysis results. The backend may need to be restarted.');
+      }
+
       if (error.response?.data?.error) {
-        throw new Error(`Backend error: ${error.response.data.error}`);
+        throw new Error(`Backend error: ${error.response.data.error} - ${error.response.data.message || ''}`);
       }
     }
 

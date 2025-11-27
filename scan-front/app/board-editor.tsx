@@ -1,7 +1,7 @@
 // app/board-editor.tsx
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, BackHandler } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BoardEditor from '@/components/chess/BoardEditor';
 import { GameMode } from '@/types/chess';
 import Button from '@/components/ui/Button';
@@ -12,6 +12,35 @@ export default function BoardEditorScreen() {
   const [showEditor, setShowEditor] = useState(false);
   const [editedFen, setEditedFen] = useState(fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
+
+  // Handle hardware back button (Android)
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBackPress();
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, []);
+
+  const handleBackPress = () => {
+    Alert.alert(
+      'Discard Position?',
+      'You will lose the scanned FEN position if you go back.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'OK',
+          onPress: () => router.replace('/'),
+          style: 'destructive',
+        },
+      ],
+      { cancelable: true }
+    );
+  };
 
   const handleEditComplete = (newFen: string) => {
     setEditedFen(newFen);
@@ -106,7 +135,7 @@ export default function BoardEditorScreen() {
       <View style={styles.footer}>
         <Button
           title="Back"
-          onPress={() => router.back()}
+          onPress={handleBackPress}
           variant="outline"
           style={{ flex: 1 }}
         />

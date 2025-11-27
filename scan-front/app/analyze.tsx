@@ -207,7 +207,7 @@ export default function Analyze() {
         {gameMode === 'analyze' && (
           <Button title="Analyze" onPress={analyzePosition} loading={loading} style={{ flex: 1 }} />
         )}
-        <Button title="Back" onPress={() => router.back()} variant="outline" style={{ flex: 1 }} />
+        <Button title="Back" onPress={() => router.replace('/')} variant="outline" style={{ flex: 1 }} />
       </View>
 
       {moveHistory.length > 0 && (

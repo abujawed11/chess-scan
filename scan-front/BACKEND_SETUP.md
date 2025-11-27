@@ -1,168 +1,149 @@
 # Backend Setup for Mobile App
 
-This guide explains how to run the backend and connect your mobile app to it.
+## Issue Fixed: "NO_RESULTS" Error
 
-## Backend Location
-Your trained model backend is located at:
-```
-D:\react\chess-detector\chess-api
-```
+The mobile app was getting `NO_RESULTS` error when trying to analyze because it wasn't initializing the backend Stockfish engine before making analysis requests.
 
-## Running the Backend
+### What Was Fixed:
 
-1. **Navigate to backend directory:**
-   ```bash
-   cd D:\react\chess-detector\chess-api
-   ```
+1. **Added engine initialization**: The app now calls `/start_engine` endpoint when it starts
+2. **Better error handling**: More detailed error messages to help debug connection issues
+3. **Automatic initialization**: Engine initializes automatically when app loads
 
-2. **Activate Python virtual environment:**
-   ```bash
-   .\venv\Scripts\activate
-   ```
+### Backend Configuration
 
-3. **Install dependencies (if not already installed):**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Your backend is at: `D:\react\chess-detector\chess-api`
 
-4. **Check the .env file:**
-   Make sure `D:\react\chess-detector\chess-api\.env` has the correct paths:
-   ```env
-   BOARD_MODEL_PATH=D:/react/chess-detector/runs/segment/board_v2/weights/best.pt
-   PIECES_MODEL_PATH=D:/react/chess-detector/models/backups/best_pieces_v3.pt
-   BOARD_CONF=0.25
-   PIECES_CONF=0.25
-   STOCKFISH_PATH=D:/react/chess-detector/engine/stockfish.exe
-   CORS_ORIGINS=*
-   ```
-   > **Important:** Set `CORS_ORIGINS=*` to allow mobile app requests
+#### Step 1: Start the Backend
 
-5. **Run the FastAPI backend:**
-   ```bash
-   uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
-   This will start the backend on `http://0.0.0.0:8000`
-
-## Connecting Mobile App to Backend
-
-### Option 1: Physical Device (Phone on WiFi)
-1. Find your computer's IP address:
-   ```bash
-   ipconfig
-   ```
-   Look for "IPv4 Address" (e.g., `192.168.0.107`)
-
-2. Update `scan-front\.env`:
-   ```env
-   EXPO_PUBLIC_VISION_API_URL=http://192.168.0.107:8000
-   EXPO_PUBLIC_CHESS_ENGINE_URL=http://192.168.0.107:8000
-   ```
-
-3. **Make sure your phone and computer are on the same WiFi network!**
-
-### Option 2: Android Emulator
-Update `scan-front\.env`:
-```env
-EXPO_PUBLIC_VISION_API_URL=http://10.0.2.2:8000
-EXPO_PUBLIC_CHESS_ENGINE_URL=http://10.0.2.2:8000
-```
-> `10.0.2.2` is a special alias for `localhost` in Android emulator
-
-### Option 3: iOS Simulator
-Update `scan-front\.env`:
-```env
-EXPO_PUBLIC_VISION_API_URL=http://localhost:8000
-EXPO_PUBLIC_CHESS_ENGINE_URL=http://localhost:8000
-```
-
-## Running the Mobile App
-
-1. **Navigate to mobile app directory:**
-   ```bash
-   cd D:\react\chess-scan\scan-front
-   ```
-
-2. **Install dependencies (if not already installed):**
-   ```bash
-   npm install
-   ```
-
-3. **Start Expo:**
-   ```bash
-   npm start
-   ```
-
-4. **Scan QR code with Expo Go app** (physical device) or press:
-   - `a` for Android emulator
-   - `i` for iOS simulator
-
-## Backend API Endpoints
-
-Your mobile app now uses these endpoints:
-
-### Chess Detection
-- **POST** `/infer`
-  - Upload image
-  - Returns: FEN, detected pieces, board corners, overlay images
-
-### Chess Engine (Stockfish)
-- **POST** `/start_engine` - Start Stockfish engine
-- **GET** `/engine_status` - Check if engine is running
-- **POST** `/analyze` - Analyze position (get best move, evaluation)
-- **POST** `/evaluate` - Evaluate a specific move
-- **POST** `/stop_engine` - Stop the engine
-
-### Health Check
-- **GET** `/health` - Check if backend is running
-
-## Testing the Connection
-
-1. Start the backend
-2. Open your mobile app
-3. Check console logs for connection messages
-4. Try scanning a chess board image
-
-## Troubleshooting
-
-### "Network Error" or "Connection Refused"
-- ✅ Check backend is running (`http://localhost:8000/health` in browser)
-- ✅ Check IP address is correct in `.env`
-- ✅ Check phone and computer are on same WiFi
-- ✅ Check Windows Firewall isn't blocking port 8000
-
-### "No board mask detected"
-- ✅ Check model paths in backend `.env`
-- ✅ Check models exist at specified paths
-
-### "Stockfish engine failed"
-- ✅ Check Stockfish path in backend `.env`
-- ✅ Call `/start_engine` before `/analyze`
-
-## Quick Test Commands
-
-Test backend from command line:
+Open a terminal in `D:\react\chess-detector\chess-api` and run:
 
 ```bash
-# Health check
-curl http://localhost:8000/health
+# Activate virtual environment (if you have one)
+venv\Scripts\activate
 
-# Start engine
-curl -X POST http://localhost:8000/start_engine
+# Start the backend (default port is 8000)
+uvicorn app:app --reload --port 8000
 
-# Check engine status
-curl http://localhost:8000/engine_status
-
-# Test analysis
-curl -X POST http://localhost:8000/analyze -F "fen=rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" -F "depth=15" -F "multipv=1"
+# Or if you prefer a different port:
+# uvicorn app:app --reload --port 8001
 ```
 
-## Models Used
+**Important**: The mobile app is configured for port **8000** by default. If your backend runs on a different port, update the mobile app's `.env` file.
 
-- **Board Detection:** YOLO segmentation model at `runs/segment/board_v2/weights/best.pt`
-- **Piece Detection:** YOLO detection model at `models/backups/best_pieces_v3.pt`
-- **Chess Engine:** Stockfish 17.1 at `engine/stockfish.exe`
+#### Step 2: Configure Mobile App Backend URL
 
----
+The mobile app needs to know where your backend is running:
 
-Your mobile app is now connected to the same backend that powers your web app! 🎉
+**For Android Emulator:**
+- Use `10.0.2.2` instead of `localhost` (this maps to your computer's localhost)
+- Default: `http://10.0.2.2:8000`
+
+**For iOS Simulator:**
+- Use `localhost` or `127.0.0.1`
+- Default: `http://localhost:8000`
+
+**For Physical Device:**
+- Use your computer's IP address on the local network
+- Find your IP: `ipconfig` (Windows) or `ifconfig` (Mac/Linux)
+- Example: `http://192.168.1.100:8000`
+
+#### Step 3: Update Environment Variables
+
+Create or update `.env` file in `scan-front` folder:
+
+```env
+# For Android Emulator (default)
+EXPO_PUBLIC_CHESS_ENGINE_URL=http://10.0.2.2:8000
+EXPO_PUBLIC_VISION_API_URL=http://10.0.2.2:8000
+
+# For iOS Simulator
+# EXPO_PUBLIC_CHESS_ENGINE_URL=http://localhost:8000
+# EXPO_PUBLIC_VISION_API_URL=http://localhost:8000
+
+# For Physical Device (replace with your computer's IP)
+# EXPO_PUBLIC_CHESS_ENGINE_URL=http://192.168.1.100:8000
+# EXPO_PUBLIC_VISION_API_URL=http://192.168.1.100:8000
+```
+
+#### Step 4: Restart Metro Bundler
+
+After changing `.env`, restart your Metro bundler:
+
+1. Press `Ctrl+C` to stop Metro
+2. Clear cache and restart:
+   ```bash
+   npx expo start -c
+   ```
+
+### Verifying Backend Connection
+
+When you start the mobile app, check the logs (Metro terminal):
+
+✅ **Success:**
+```
+♟️ Chess Engine Module Loaded
+🔗 CHESS_ENGINE_URL: http://10.0.2.2:8000
+🚀 App started, initializing chess engine...
+✅ Backend Stockfish initialized successfully
+  🔧 Engine: /path/to/stockfish
+✅ Chess engine ready for analysis
+```
+
+❌ **Connection Failed:**
+```
+❌ Engine initialization failed
+🔌 Cannot connect to backend. Is the server running at http://10.0.2.2:8000?
+⚠️ Chess engine initialization failed. Analysis features may not work.
+```
+
+### Testing Analysis
+
+1. Open the app
+2. Tap "Analysis Board" or "Play New Game"
+3. The app should automatically initialize the engine
+4. When you analyze, check logs for:
+   ```
+   🤔 getBestMove called
+   🚀 Sending analysis request to: http://10.0.2.2:8000/analyze
+   ✅ Analysis response received!
+   ♟️ Best move: e2e4
+   ```
+
+### Troubleshooting
+
+#### Problem: "Cannot connect to backend"
+
+**Solution:**
+1. Make sure backend is running: `uvicorn app:app --reload --port 8000`
+2. Check backend URL in logs matches your setup
+3. For Android emulator, use `10.0.2.2`, NOT `localhost`
+4. For physical device, make sure computer and device are on same WiFi
+
+#### Problem: "NO_RESULTS" Error
+
+**Solution:**
+1. Restart the backend server
+2. Check if Stockfish binary exists at the path shown in backend logs
+3. Make sure the backend port matches (8000 by default)
+
+#### Problem: Analysis is slow
+
+**Solution:**
+1. Backend processes requests synchronously
+2. Reduce analysis depth (default is 15) if needed
+3. Check backend logs for timing information
+
+### Backend Endpoints Used
+
+- `POST /start_engine` - Initialize Stockfish engine (called once at app start)
+- `POST /analyze` - Analyze position (called for each analysis request)
+  - Parameters: `fen`, `depth`, `multipv`
+
+### Port Configuration
+
+- **Backend location**: `D:\react\chess-detector\chess-api`
+- **Default port**: 8000 (FastAPI/uvicorn default)
+- Both web app and mobile app use the same backend
+
+Make sure the mobile app's backend URL matches where your backend is running!

@@ -9,6 +9,10 @@ export const API_CONFIG = {
 
   // For iOS simulator, use: http://localhost:8000
   // For physical device, use your computer's IP: http://192.168.1.XXX:8000
+  
+  // NOTE: If your backend runs on a different port, set these in your .env file:
+  // EXPO_PUBLIC_VISION_API_URL=http://10.0.2.2:8001
+  // EXPO_PUBLIC_CHESS_ENGINE_URL=http://10.0.2.2:8001
 
   TIMEOUT: 30000,
 };

@@ -59,3 +59,6 @@ BoardEditor.coordinatesFlipped
 - Default value of boardCoordinatesFlipped is false
 - No breaking changes to existing functionality
 - Fully backward compatible
+
+
+
