@@ -414,12 +414,19 @@ export default function Analyze() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {gameMode === 'analyze' && '🔍 Analysis'}
-            {gameMode === 'play-white' && '♔ Playing White'}
-            {gameMode === 'play-black' && '♚ Playing Black'}
-            {gameMode === 'watch' && '👁 Watch'}
-          </Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.title}>
+              {gameMode === 'analyze' && '🔍 Analysis'}
+              {gameMode === 'play-white' && '♔ Playing White'}
+              {gameMode === 'play-black' && '♚ Playing Black'}
+              {gameMode === 'watch' && '👁 Watch'}
+            </Text>
+            {loading && (
+              <View style={styles.headerLoading}>
+                <LoadingSpinner message="Analyzing..." size="small" />
+              </View>
+            )}
+          </View>
           {isPlayerTurn && !gameStatus.isGameOver && (
             <Text style={styles.turnIndicator}>Your turn</Text>
           )}
@@ -491,15 +498,8 @@ export default function Analyze() {
           </View>
         )}
 
-        {/* Loading */}
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <LoadingSpinner message="Analyzing..." size="small" />
-          </View>
-        )}
-
         {/* Evaluation & Best Move */}
-        {!loading && !gameStatus.isGameOver && (
+        {!gameStatus.isGameOver && (
           <View style={styles.infoPanel}>
             <View style={styles.infoRow}>
               <View style={styles.infoBox}>
@@ -523,7 +523,7 @@ export default function Analyze() {
         )}
 
         {/* Engine Lines */}
-        {!loading && engineLines.length > 0 && (
+        {engineLines.length > 0 && (
           <View style={styles.linesPanel}>
             <Text style={styles.linesTitle}>Engine Analysis</Text>
             {engineLines.map((line, idx) => (
@@ -570,8 +570,7 @@ export default function Analyze() {
             <Button
               title="Analyze"
               onPress={analyzePosition}
-              loading={loading}
-              disabled={gameStatus.isGameOver}
+              disabled={gameStatus.isGameOver || loading}
               style={{ flex: 1 }}
             />
           )}
@@ -670,10 +669,18 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  headerLoading: {
+    marginLeft: 12,
+  },
   title: {
     fontSize: 20,
     fontWeight: '700',
-    marginBottom: 4,
   },
   turnIndicator: {
     fontSize: 14,
@@ -725,9 +732,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#92400e',
     textAlign: 'center',
-  },
-  loadingContainer: {
-    marginBottom: 16,
   },
   infoPanel: {
     backgroundColor: '#f3f4f6',

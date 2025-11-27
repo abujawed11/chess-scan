@@ -81,14 +81,13 @@ const styles = StyleSheet.create({
   },
   // Small inline version styles
   inlineContainer: {
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    gap: 8,
   },
   inlineMessage: {
-    marginTop: 8,
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
-    textAlign: 'center',
+    fontWeight: '500',
   },
 });
