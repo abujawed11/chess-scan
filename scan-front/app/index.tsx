@@ -5,10 +5,14 @@ import { useState } from 'react';
 import ModeCard from '@/components/ui/ModeCard';
 import Button from '@/components/ui/Button';
 import ThemeSelector from '@/components/ui/ThemeSelector';
+import * as ImagePicker from 'expo-image-picker';
+import { recognizeChessBoard } from '@/services/visionApi';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 export default function Home() {
   const [showFenInput, setShowFenInput] = useState(false);
   const [fenInput, setFenInput] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const handleLoadFromFen = () => {
     if (fenInput.trim()) {
@@ -16,6 +20,64 @@ export default function Home() {
         pathname: '/analyze',
         params: { fen: fenInput.trim(), mode: 'analyze' }
       });
+    }
+  };
+
+  const handleUploadImage = async () => {
+    try {
+      console.log('📂 Opening image picker from home...');
+      setUploading(true);
+
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Sorry, we need camera roll permissions to upload images!');
+        setUploading(false);
+        return;
+      }
+
+      // Open image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        console.log('✅ Image selected from gallery:', imageUri);
+        console.log('🔄 Processing image...');
+
+        // Resize image to reduce network payload
+        const resizedImage = await manipulateAsync(
+          imageUri,
+          [{ resize: { width: 1600 } }],
+          { compress: 0.8, format: SaveFormat.JPEG }
+        );
+
+        console.log('📤 Sending to backend for board detection...');
+        const boardResult = await recognizeChessBoard(resizedImage.uri);
+
+        console.log('✅ Board detected!');
+        console.log('♟️ FEN:', boardResult.fen);
+
+        // Navigate to board preview
+        router.push({
+          pathname: '/board-preview',
+          params: {
+            imageUri: resizedImage.uri,
+            boardCorners: boardResult.boardCorners ? JSON.stringify(boardResult.boardCorners) : '',
+            fen: boardResult.fen,
+          },
+        });
+      } else {
+        console.log('❌ Image picker cancelled');
+      }
+    } catch (error) {
+      console.error('❌ Upload error:', error);
+      alert(`Failed to process image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again with a clear board photo.`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -61,6 +123,14 @@ export default function Home() {
             title="Scan from Camera"
             description="Capture board position photo"
             onPress={() => router.push('/scan')}
+          />
+
+          <ModeCard
+            icon="🖼️"
+            title="Upload Image"
+            description="Select board photo from gallery"
+            onPress={handleUploadImage}
+            disabled={uploading}
           />
 
           <ModeCard

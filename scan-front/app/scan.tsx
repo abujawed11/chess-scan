@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ImageCropper from '@/components/ui/ImageCropper';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 
 type ScanStep = 'camera' | 'cropping' | 'processing';
 
@@ -63,6 +64,40 @@ export default function Scan() {
       console.error('Photo capture error:', error);
     } finally {
       setTaking(false);
+    }
+  };
+
+  const pickImageFromGallery = async () => {
+    try {
+      console.log('📂 Opening image picker...');
+      
+      // Request permission to access media library
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Sorry, we need camera roll permissions to upload images!');
+        return;
+      }
+
+      // Open image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // We'll handle cropping/resizing ourselves
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        console.log('✅ Image selected from gallery:', imageUri);
+        setPhotoUri(imageUri);
+        
+        // Process the selected image
+        await handlePhotoCapture(imageUri);
+      } else {
+        console.log('❌ Image picker cancelled');
+      }
+    } catch (error) {
+      console.error('❌ Image picker error:', error);
+      alert(`Failed to pick image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -190,9 +225,16 @@ export default function Scan() {
 
         <View style={styles.controls}>
           <Button
-            title="Capture Board"
+            title="📸 Capture Board"
             onPress={takePhoto}
             loading={taking}
+            size="lg"
+            style={{ marginBottom: 12 }}
+          />
+          <Button
+            title="🖼️ Upload from Gallery"
+            onPress={pickImageFromGallery}
+            variant="secondary"
             size="lg"
           />
         </View>
