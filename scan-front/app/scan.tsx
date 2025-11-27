@@ -1,7 +1,7 @@
 // app/scan.tsx
 import { useIsFocused } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, BackHandler } from 'react-native';
 import { useRef, useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { recognizeChessBoard } from '@/services/visionApi';
@@ -19,6 +19,16 @@ export default function Scan() {
   const [step, setStep] = useState<ScanStep>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [taking, setTaking] = useState(false);
+
+  // Handle hardware back button (Android)
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.back();
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, []);
 
   useEffect(() => {
     if (!permission) requestPermission();
@@ -143,7 +153,7 @@ export default function Scan() {
         <View style={styles.backButtonContainer}>
           <Button
             title="← Back"
-            onPress={() => router.replace('/')}
+            onPress={() => router.back()}
             variant="outline"
           />
         </View>

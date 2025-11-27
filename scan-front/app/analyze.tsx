@@ -1,7 +1,7 @@
 // app/analyze.tsx
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, BackHandler } from 'react-native';
 import { Chess } from 'chess.js';
 import ChessBoard from '@/components/chess/ChessBoard';
 import Button from '@/components/ui/Button';
@@ -27,6 +27,16 @@ export default function Analyze() {
   const isPlayerTurn =
     (gameMode === 'play-white' && game.turn() === 'w') ||
     (gameMode === 'play-black' && game.turn() === 'b');
+
+  // Handle hardware back button (Android)
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      router.back();
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, []);
 
   useEffect(() => {
     if (gameMode === 'analyze') {
@@ -207,7 +217,7 @@ export default function Analyze() {
         {gameMode === 'analyze' && (
           <Button title="Analyze" onPress={analyzePosition} loading={loading} style={{ flex: 1 }} />
         )}
-        <Button title="Back" onPress={() => router.replace('/')} variant="outline" style={{ flex: 1 }} />
+        <Button title="Back" onPress={() => router.back()} variant="outline" style={{ flex: 1 }} />
       </View>
 
       {moveHistory.length > 0 && (
