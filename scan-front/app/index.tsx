@@ -5,6 +5,7 @@ import { useState } from 'react';
 import ModeCard from '@/components/ui/ModeCard';
 import Button from '@/components/ui/Button';
 import ThemeSelector from '@/components/ui/ThemeSelector';
+import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import * as ImagePicker from 'expo-image-picker';
 import { recognizeChessBoard } from '@/services/visionApi';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -80,6 +81,11 @@ export default function Home() {
       setUploading(false);
     }
   };
+
+  // Show loading screen during upload
+  if (uploading) {
+    return <LoadingSpinner message="Processing image..." />;
+  }
 
   return (
     <LinearGradient

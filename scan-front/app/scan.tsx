@@ -20,6 +20,7 @@ export default function Scan() {
   const [step, setStep] = useState<ScanStep>('camera');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [taking, setTaking] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Handle hardware back button (Android)
   useEffect(() => {
@@ -34,6 +35,9 @@ export default function Scan() {
   useEffect(() => {
     if (!permission) requestPermission();
   }, [permission]);
+
+  // Debug: Log current state
+  console.log('🎬 Scan component state:', { step, uploading, taking, hasPhotoUri: !!photoUri });
 
   if (!permission?.granted) {
     return (
@@ -70,7 +74,7 @@ export default function Scan() {
   const pickImageFromGallery = async () => {
     try {
       console.log('📂 Opening image picker...');
-      
+
       // Request permission to access media library
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -88,8 +92,20 @@ export default function Scan() {
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         console.log('✅ Image selected from gallery:', imageUri);
+
+        // Set loading state first
+        setUploading(true);
         setPhotoUri(imageUri);
-        
+
+        // Wait for next frame to ensure state update is rendered
+        await new Promise(resolve => {
+          requestAnimationFrame(() => {
+            setTimeout(resolve, 500); // Visible delay for loading screen
+          });
+        });
+
+        console.log('📊 Starting image processing...');
+
         // Process the selected image
         await handlePhotoCapture(imageUri);
       } else {
@@ -97,6 +113,7 @@ export default function Scan() {
       }
     } catch (error) {
       console.error('❌ Image picker error:', error);
+      setUploading(false);
       alert(`Failed to pick image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -121,7 +138,8 @@ export default function Scan() {
     console.log('🖼️ Original Image URI:', imageUri);
 
     setStep('processing');
-    
+    // Don't clear uploading here - let processing state take over
+
     try {
       console.log('🔄 Preparing image for backend...');
 
@@ -173,25 +191,32 @@ export default function Scan() {
       console.log('✅ Navigation initiated');
     } catch (error) {
       console.error('❌ Board detection error:', error);
-      
+
       // Log detailed error info
       if (error instanceof Error) {
         console.error('Error name:', error.name);
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
       }
-      
+
       // Reset state first
       setStep('camera');
       setPhotoUri(null);
-      
+      setUploading(false);
+
       // Then show alert
       alert(`Board detection failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try taking another photo with the board clearly visible.`);
     }
   };
 
   if (step === 'processing') {
+    console.log('🔄 Rendering: Processing screen');
     return <LoadingSpinner message="Analyzing board position..." />;
+  }
+
+  if (uploading) {
+    console.log('📤 Rendering: Upload loading screen');
+    return <LoadingSpinner message="Loading image..." />;
   }
 
   if (step === 'cropping' && photoUri) {
@@ -236,6 +261,7 @@ export default function Scan() {
             onPress={pickImageFromGallery}
             variant="secondary"
             size="lg"
+            disabled={uploading}
           />
         </View>
       </View>
