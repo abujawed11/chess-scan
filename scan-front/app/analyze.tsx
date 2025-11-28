@@ -27,6 +27,66 @@ interface EngineLine {
   pvSan?: string;
 }
 
+// Simple horizontal evaluation bar for mobile
+const MAX_ABS_EVAL = 5; // show full bar at ±5 pawns
+
+type EvaluationBarProps = {
+  // evaluation should be from White's perspective: >0 = White better, <0 = Black better
+  evaluation: number | null;
+};
+
+const EvaluationBar: React.FC<EvaluationBarProps> = ({ evaluation }) => {
+  // If no eval yet, treat as equal
+  let ev = evaluation ?? 0;
+
+  // Treat "mate" values specially (you use |ev| > 90 for mate in formatEvaluation)
+  if (Math.abs(ev) > 90) {
+    ev = ev > 0 ? MAX_ABS_EVAL : -MAX_ABS_EVAL;
+  }
+
+  // Clamp to [-MAX_ABS_EVAL, MAX_ABS_EVAL]
+  const clamped = Math.max(-MAX_ABS_EVAL, Math.min(MAX_ABS_EVAL, ev));
+
+  // Fractions for each side (0 → 1)
+  const whiteFrac = clamped > 0 ? clamped / MAX_ABS_EVAL : 0;
+  const blackFrac = clamped < 0 ? -clamped / MAX_ABS_EVAL : 0;
+
+  return (
+    <View style={styles.evalBarContainer}>
+      <View style={styles.evalBarTrack}>
+        {/* Black side (left) */}
+        <View style={styles.evalHalf}>
+          <View
+            style={[
+              styles.evalBlackFill,
+              { width: `${blackFrac * 100}%` },
+            ]}
+          />
+        </View>
+
+        {/* White side (right) */}
+        <View style={styles.evalHalf}>
+          <View
+            style={[
+              styles.evalWhiteFill,
+              { width: `${whiteFrac * 100}%` },
+            ]}
+          />
+        </View>
+      </View>
+
+      <View style={styles.evalBarLabelsRow}>
+        <Text style={styles.evalLabel}>Black</Text>
+        <Text style={styles.evalLabel}>Equal</Text>
+        <Text style={styles.evalLabel}>White</Text>
+      </View>
+    </View>
+  );
+};
+
+
+
+
 export default function Analyze() {
   const { fen, mode } = useLocalSearchParams<{ fen?: string; mode?: GameMode }>();
 
@@ -441,10 +501,10 @@ export default function Analyze() {
               </View>
             )}
             {isPlayerTurn && !gameStatus.isGameOver && (
-            <Text style={styles.turnIndicator}>Your turn</Text>
-          )}
+              <Text style={styles.turnIndicator}>Your turn</Text>
+            )}
           </View>
-          
+
         </View>
 
         {/* Board */}
@@ -511,7 +571,7 @@ export default function Analyze() {
           >
             <Text style={styles.navButtonText}>◀</Text>
           </Pressable>
-          
+
           <View style={styles.moveCounter}>
             <Text style={styles.moveCounterText}>
               {currentMoveIndex + 1} / {moves.length || 'Start'}
@@ -548,6 +608,9 @@ export default function Analyze() {
         {/* Evaluation & Best Move */}
         {!gameStatus.isGameOver && (
           <View style={styles.infoPanel}>
+            {/* NEW: horizontal evaluation bar */}
+            <EvaluationBar evaluation={evaluation} />
+
             <View style={styles.infoRow}>
               <View style={styles.infoBox}>
                 <Text style={styles.infoLabel}>Evaluation</Text>
@@ -568,6 +631,29 @@ export default function Analyze() {
             )}
           </View>
         )}
+
+        {/* {!gameStatus.isGameOver && (
+          <View style={styles.infoPanel}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Evaluation</Text>
+                <Text style={[styles.infoValue, { color: getEvaluationColor(evaluation) }]}>
+                  {formatEvaluation(evaluation)}
+                </Text>
+              </View>
+              {bestMove && (
+                <View style={styles.infoBox}>
+                  <Text style={styles.infoLabel}>Best Move</Text>
+                  <Text style={styles.infoValue}>{bestMove}</Text>
+                </View>
+              )}
+            </View>
+
+            {gameMode === 'analyze' && bestMove && (
+              <Button title="Make Best Move" onPress={handleMakeBestMove} size="sm" style={{ marginTop: 12 }} />
+            )}
+          </View>
+        )} */}
 
         {/* Engine Lines */}
         {engineLines.length > 0 && (
@@ -629,6 +715,43 @@ export default function Analyze() {
 }
 
 const styles = StyleSheet.create({
+
+
+  evalBarContainer: {
+    marginBottom: 12,
+  },
+  evalBarTrack: {
+    flexDirection: 'row',
+    height: 14,
+    borderRadius: 9999,
+    overflow: 'hidden',
+    backgroundColor: '#e5e7eb',
+  },
+  evalHalf: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  evalBlackFill: {
+    height: '100%',
+    backgroundColor: '#dc2626', // red for Black advantage
+    alignSelf: 'flex-end',      // fill from center towards left
+  },
+  evalWhiteFill: {
+    height: '100%',
+    backgroundColor: '#16a34a', // green for White advantage
+    alignSelf: 'flex-start',    // fill from center towards right
+  },
+  evalBarLabelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  evalLabel: {
+    fontSize: 10,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+
   container: {
     flex: 1,
     backgroundColor: '#fff',
@@ -930,3 +1053,5 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
 });
+
+
