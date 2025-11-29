@@ -61,120 +61,18 @@ export default function BoardEditor({
   const [croppedImageUri, setCroppedImageUri] = useState<string | null>(null);
   const [processingImage, setProcessingImage] = useState(false);
 
-  // Auto-crop the image based on board corners when component mounts
+  // Use original image without cropping to match web app behavior
   useEffect(() => {
-    const cropImage = async () => {
-      if (!referenceImageUri) {
-        setCroppedImageUri(null);
-        return;
-      }
+    if (!referenceImageUri) {
+      setCroppedImageUri(null);
+      return;
+    }
 
-      // If no board corners, just use the original image
-      if (!boardCorners) {
-        setCroppedImageUri(referenceImageUri);
-        return;
-      }
-
-      try {
-        setProcessingImage(true);
-        console.log('🔲 Cropping image based on board corners...');
-        console.log('📦 Raw boardCorners:', boardCorners);
-
-        // Parse boardCorners - it might be a string (from navigation params) or already parsed
-        let corners: [[number, number], [number, number], [number, number], [number, number]];
-        if (typeof boardCorners === 'string') {
-          try {
-            const parsed = JSON.parse(boardCorners);
-            // Handle case where it might be double-stringified
-            if (typeof parsed === 'string') {
-              corners = JSON.parse(parsed);
-            } else {
-              corners = parsed;
-            }
-          } catch (e) {
-            console.error('❌ Failed to parse boardCorners JSON:', e);
-            console.error('Raw boardCorners:', boardCorners);
-            setCroppedImageUri(referenceImageUri);
-            return;
-          }
-        } else {
-          corners = boardCorners;
-        }
-
-        // Validate corners format
-        if (!Array.isArray(corners) || corners.length !== 4) {
-          console.warn('⚠️ Invalid boardCorners format:', corners);
-          setCroppedImageUri(referenceImageUri);
-          return;
-        }
-
-        // Validate each corner is a valid [x, y] pair
-        for (let i = 0; i < corners.length; i++) {
-          const corner = corners[i];
-          if (!Array.isArray(corner) || corner.length !== 2) {
-            console.warn(`⚠️ Invalid corner at index ${i}:`, corner);
-            setCroppedImageUri(referenceImageUri);
-            return;
-          }
-          if (typeof corner[0] !== 'number' || typeof corner[1] !== 'number' || 
-              isNaN(corner[0]) || isNaN(corner[1])) {
-            console.warn(`⚠️ Invalid corner coordinates at index ${i}:`, corner);
-            setCroppedImageUri(referenceImageUri);
-            return;
-          }
-        }
-
-        // boardCorners format: [[x, y], [x, y], [x, y], [x, y]]
-        // Extract x and y coordinates from all 4 corners
-        const xs = corners.map(corner => corner[0]);
-        const ys = corners.map(corner => corner[1]);
-
-        const minX = Math.max(0, Math.min(...xs));
-        const maxX = Math.max(...xs);
-        const minY = Math.max(0, Math.min(...ys));
-        const maxY = Math.max(...ys);
-
-        const width = Math.max(1, maxX - minX);
-        const height = Math.max(1, maxY - minY);
-
-        console.log('📐 Crop region:', { minX, minY, width, height });
-        console.log('📐 Corners:', JSON.stringify(corners, null, 2));
-
-        // Validate crop dimensions are reasonable
-        if (width < 10 || height < 10) {
-          console.warn('⚠️ Crop region too small, using original image');
-          setCroppedImageUri(referenceImageUri);
-          return;
-        }
-
-        // Crop the image to the detected board region
-        const result = await manipulateAsync(
-          referenceImageUri,
-          [
-            {
-              crop: {
-                originX: Math.round(minX),
-                originY: Math.round(minY),
-                width: Math.round(width),
-                height: Math.round(height),
-              },
-            },
-          ],
-          { compress: 0.9, format: SaveFormat.JPEG }
-        );
-
-        console.log('✅ Image cropped successfully:', result.uri);
-        setCroppedImageUri(result.uri);
-      } catch (error) {
-        console.error('❌ Error cropping image:', error);
-        // Fallback to original image
-        setCroppedImageUri(referenceImageUri);
-      } finally {
-        setProcessingImage(false);
-      }
-    };
-
-    cropImage();
+    // Always use the original image without any cropping or preprocessing
+    // This matches the web app behavior which sends unmodified images
+    console.log('📸 Using original reference image (no cropping to match web app)');
+    setCroppedImageUri(referenceImageUri);
+    setProcessingImage(false);
   }, [referenceImageUri, boardCorners]);
   const [selectedPiece, setSelectedPiece] = useState<ChessPiece | null>(null);
   const [turn, setTurn] = useState<PieceColor>('w');
@@ -407,7 +305,7 @@ export default function BoardEditor({
                 color="#6b7280"
               />
               <Text style={styles.referenceImageTitle}>
-                📸 {boardCorners ? 'Detected Board' : 'Original Photo'}
+                📸 Original Photo
               </Text>
             </View>
             <Text style={styles.referenceImageHint}>
@@ -429,9 +327,7 @@ export default function BoardEditor({
                     contentFit="contain"
                   />
                   <Text style={styles.referenceImageCaption}>
-                    {boardCorners 
-                      ? '✨ Auto-cropped to detected board • Use as reference to fix errors'
-                      : 'Use this reference to correct any detection errors'}
+                    Use this reference to correct any detection errors
                   </Text>
                 </>
               ) : null}

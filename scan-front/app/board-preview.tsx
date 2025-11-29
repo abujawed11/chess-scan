@@ -5,8 +5,9 @@ import { useEffect } from 'react';
 import Button from '@/components/ui/Button';
 
 export default function BoardPreview() {
-  const { imageUri, boardCorners, fen } = useLocalSearchParams<{ 
-    imageUri: string; 
+  const { imageUri, overlayUri, boardCorners, fen } = useLocalSearchParams<{
+    imageUri: string;
+    overlayUri?: string;
     boardCorners?: string;
     fen: string;
   }>();
@@ -15,7 +16,7 @@ export default function BoardPreview() {
     console.log('🖼️ BoardPreview mounted');
     console.log('📦 Received params:', {
       hasImageUri: !!imageUri,
-      imageUri: imageUri,
+      hasOverlayUri: !!overlayUri,
       hasBoardCorners: !!boardCorners,
       fen: fen,
     });
@@ -24,7 +25,7 @@ export default function BoardPreview() {
     if (!imageUri || !fen) {
       console.error('❌ Missing required params:', { imageUri: !!imageUri, fen: !!fen });
     }
-  }, [imageUri, fen, boardCorners]);
+  }, [imageUri, overlayUri, fen, boardCorners]);
 
   const handleRetake = () => {
     console.log('📸 Retake requested, going back to camera');
@@ -39,9 +40,9 @@ export default function BoardPreview() {
     // autoEdit=true will skip "Position Recognized" screen and go directly to editing
     router.replace({
       pathname: '/board-editor',
-      params: { 
-        fen: fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 
-        imageUri: imageUri,
+      params: {
+        fen: fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        imageUri: overlayUri || imageUri, // Use warped overlay if available, otherwise original
         boardCorners: boardCorners || '',
         autoEdit: 'true', // Skip preview, go directly to editor
       },
@@ -60,19 +61,24 @@ export default function BoardPreview() {
 
       {/* Detected Board Image */}
       <View style={styles.imageContainer}>
-        <Text style={styles.imageLabel}>Captured Board:</Text>
-        <Image 
-          source={{ uri: imageUri }} 
+        <Text style={styles.imageLabel}>
+          {overlayUri ? 'Detected Pieces (Cropped Board):' : 'Captured Board:'}
+        </Text>
+        <Image
+          source={{ uri: overlayUri || imageUri }}
           style={styles.boardImage}
           resizeMode="contain"
           onError={(e) => {
             console.error('❌ Image load error:', e.nativeEvent.error);
-            console.error('Tried to load URI:', imageUri);
+            console.error('Tried to load URI:', overlayUri || imageUri);
           }}
           onLoad={() => console.log('✅ Board image loaded successfully')}
         />
         <Text style={styles.imageCaption}>
-          FEN: {fen}
+          {overlayUri
+            ? '✨ Warped & cropped board with piece detections (matches web app)'
+            : `FEN: ${fen}`
+          }
         </Text>
       </View>
 

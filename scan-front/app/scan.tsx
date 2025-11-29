@@ -10,6 +10,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import ImageCropper from '@/components/ui/ImageCropper';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 type ScanStep = 'camera' | 'cropping' | 'processing';
 
@@ -52,9 +53,9 @@ export default function Scan() {
     if (!camRef.current) return;
     try {
       setTaking(true);
-      // Lower quality since we resize anyway - faster capture
+      // Maximum quality to match web app - send original unmodified image
       const picture = await camRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 1.0,
         skipProcessing: false,
       });
       if (picture?.uri) {
@@ -141,50 +142,62 @@ export default function Scan() {
     // Don't clear uploading here - let processing state take over
 
     try {
-      console.log('🔄 Preparing image for backend...');
-
-      // Resize image to reduce network payload size
-      // This prevents network timeout/failure with large camera images
-      const resizedImage = await manipulateAsync(
-        imageUri,
-        [{ resize: { width: 1600 } }], // Max width 1600px
-        { compress: 0.8, format: SaveFormat.JPEG }
-      );
-
-      console.log('✅ Image resized:', resizedImage.uri);
-      console.log('📤 Sending to backend for board detection...');
+      console.log('📤 Sending ORIGINAL image to backend (no resize/compression to match web app)...');
 
       const uploadStart = Date.now();
-      const result = await recognizeChessBoard(resizedImage.uri);
+      const result = await recognizeChessBoard(imageUri);
       const uploadTime = Date.now() - uploadStart;
       const totalTime = Date.now() - startTime;
 
       console.log('✅ Board detection successful!');
       console.log('⏱️ Timing: Upload+Detect:', uploadTime, 'ms, Total:', totalTime, 'ms');
-      console.log('📊 Result:', { 
-        fen: result.fen, 
+      console.log('📊 Result:', {
+        fen: result.fen,
         hasDebugImage: !!result.debugImage,
-        hasBoardCorners: !!result.boardCorners 
+        hasOverlayImage: !!result.overlayImage,
+        hasBoardCorners: !!result.boardCorners
       });
+
+      // Save overlay image (warped board) to temp file to match web app behavior
+      let overlayUri = '';
+      if (result.overlayImage) {
+        try {
+          console.log('💾 Saving overlay image to temp file...');
+          // Extract base64 data (remove data:image/png;base64, prefix)
+          const base64Data = result.overlayImage.replace(/^data:image\/\w+;base64,/, '');
+
+          // Use legacy FileSystem API (still supported in Expo SDK v54)
+          const fileName = `overlay_${Date.now()}.png`;
+          const tempPath = FileSystem.cacheDirectory + fileName;
+
+          await FileSystem.writeAsStringAsync(tempPath, base64Data, {
+            encoding: 'base64',
+          });
+
+          overlayUri = tempPath;
+          console.log('✅ Overlay saved to:', overlayUri);
+        } catch (error) {
+          console.error('❌ Failed to save overlay image:', error);
+        }
+      }
 
       // Navigate to board preview screen to show detected board
       console.log('🔀 Navigating to board-preview...');
       console.log('📦 Navigation params:', {
-        hasImageUri: !!resizedImage.uri,
-        debugImageSize: result.debugImage ? `${(result.debugImage.length / 1024).toFixed(1)} KB` : 'none',
+        hasImageUri: !!imageUri,
+        hasOverlayUri: !!overlayUri,
         hasBoardCorners: !!result.boardCorners,
         fen: result.fen,
       });
 
-      // Note: We don't pass debugImage through params because base64 images can be
-      // too large for Expo Router navigation params (can cause "Failed to parse URL" errors)
-      // Just show the original resized image instead
+      // Pass the warped overlay image (matches web app behavior)
       router.replace({
         pathname: '/board-preview',
-        params: { 
-          imageUri: resizedImage.uri,
+        params: {
+          imageUri: imageUri,
+          overlayUri: overlayUri, // Warped board with detections
           boardCorners: result.boardCorners ? JSON.stringify(result.boardCorners) : '',
-          fen: result.fen, // Store FEN for later use
+          fen: result.fen,
         },
       });
       

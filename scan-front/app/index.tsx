@@ -8,7 +8,7 @@ import ThemeSelector from '@/components/ui/ThemeSelector';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import * as ImagePicker from 'expo-image-picker';
 import { recognizeChessBoard } from '@/services/visionApi';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
 
 export default function Home() {
   const [showFenInput, setShowFenInput] = useState(false);
@@ -47,26 +47,41 @@ export default function Home() {
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         console.log('✅ Image selected from gallery:', imageUri);
-        console.log('🔄 Processing image...');
+        console.log('📤 Sending ORIGINAL image to backend (no resize/compression to match web app)...');
 
-        // Resize image to reduce network payload
-        const resizedImage = await manipulateAsync(
-          imageUri,
-          [{ resize: { width: 1600 } }],
-          { compress: 0.8, format: SaveFormat.JPEG }
-        );
-
-        console.log('📤 Sending to backend for board detection...');
-        const boardResult = await recognizeChessBoard(resizedImage.uri);
+        const boardResult = await recognizeChessBoard(imageUri);
 
         console.log('✅ Board detected!');
         console.log('♟️ FEN:', boardResult.fen);
+
+        // Save overlay image (warped board) to temp file to match web app behavior
+        let overlayUri = '';
+        if (boardResult.overlayImage) {
+          try {
+            console.log('💾 Saving overlay image to temp file...');
+            const base64Data = boardResult.overlayImage.replace(/^data:image\/\w+;base64,/, '');
+
+            // Use legacy FileSystem API (still supported in Expo SDK v54)
+            const fileName = `overlay_${Date.now()}.png`;
+            const tempPath = FileSystem.cacheDirectory + fileName;
+
+            await FileSystem.writeAsStringAsync(tempPath, base64Data, {
+              encoding: 'base64',
+            });
+
+            overlayUri = tempPath;
+            console.log('✅ Overlay saved to:', overlayUri);
+          } catch (error) {
+            console.error('❌ Failed to save overlay image:', error);
+          }
+        }
 
         // Navigate to board preview
         router.push({
           pathname: '/board-preview',
           params: {
-            imageUri: resizedImage.uri,
+            imageUri: imageUri,
+            overlayUri: overlayUri, // Warped board with detections
             boardCorners: boardResult.boardCorners ? JSON.stringify(boardResult.boardCorners) : '',
             fen: boardResult.fen,
           },
