@@ -9,6 +9,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import * as ImagePicker from 'expo-image-picker';
 import { recognizeChessBoard } from '@/services/visionApi';
 import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 export default function Home() {
   const [showFenInput, setShowFenInput] = useState(false);
@@ -47,9 +48,19 @@ export default function Home() {
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         console.log('✅ Image selected from gallery:', imageUri);
-        console.log('📤 Sending ORIGINAL image to backend (no resize/compression to match web app)...');
+        console.log('📤 Preparing image for backend...');
 
-        const boardResult = await recognizeChessBoard(imageUri);
+        // Fix EXIF orientation without resizing/compressing to prevent rotation issues
+        const fixedImage = await manipulateAsync(
+          imageUri,
+          [{ rotate: 0 }], // This forces EXIF orientation correction
+          { compress: 1, format: SaveFormat.JPEG } // No compression, preserve quality
+        );
+
+        console.log('✅ EXIF orientation corrected');
+        console.log('📤 Sending to backend...');
+
+        const boardResult = await recognizeChessBoard(fixedImage.uri);
 
         console.log('✅ Board detected!');
         console.log('♟️ FEN:', boardResult.fen);

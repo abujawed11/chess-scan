@@ -142,10 +142,20 @@ export default function Scan() {
     // Don't clear uploading here - let processing state take over
 
     try {
-      console.log('📤 Sending ORIGINAL image to backend (no resize/compression to match web app)...');
+      console.log('📤 Preparing image for backend...');
+
+      // Fix EXIF orientation without resizing/compressing to prevent rotation issues
+      const fixedImage = await manipulateAsync(
+        imageUri,
+        [{ rotate: 0 }], // This forces EXIF orientation correction
+        { compress: 1, format: SaveFormat.JPEG } // No compression, preserve quality
+      );
+
+      console.log('✅ EXIF orientation corrected');
+      console.log('📤 Sending to backend...');
 
       const uploadStart = Date.now();
-      const result = await recognizeChessBoard(imageUri);
+      const result = await recognizeChessBoard(fixedImage.uri);
       const uploadTime = Date.now() - uploadStart;
       const totalTime = Date.now() - startTime;
 
