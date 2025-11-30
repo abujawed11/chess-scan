@@ -1,8 +1,8 @@
 // Chess board vision recognition API service
 // Integrates with the trained YOLO model backend
 
-import axios from 'axios';
 import { API_CONFIG } from '@/constants/config';
+import axios from 'axios';
 
 // Debug: Log API configuration when module loads
 console.log('🔧 Vision API Module Loaded');
@@ -94,20 +94,38 @@ export async function recognizeChessBoard(
       formData.append('corners', JSON.stringify(manualCorners));
     }
 
-    console.log('🚀 Sending inference request to:', `${API_CONFIG.VISION_API_URL}/infer`);
-    console.log('📤 Request details:', {
-      url: `${API_CONFIG.VISION_API_URL}/infer`,
-      method: 'POST',
-      fileObject,
-      flip_ranks: flipRanks ? 'true' : 'false',
-    });
+    // console.log('🚀 Sending inference request to:', `${API_CONFIG.VISION_API_URL}/infer`);
+    // console.log('📤 Request details:', {
+    //   url: `${API_CONFIG.VISION_API_URL}/infer`,
+    //   method: 'POST',
+    //   fileObject,
+    //   flip_ranks: flipRanks ? 'true' : 'false',
+    // });
 
-    // Use fetch API - don't set Content-Type header, let it be set automatically
+    // // Use fetch API - don't set Content-Type header, let it be set automatically
+    // const response = await fetch(`${API_CONFIG.VISION_API_URL}/infer`, {
+    //   method: 'POST',
+    //   body: formData,
+    //   // Important: No Content-Type header! Let React Native set it with boundary
+    // });
+
+    // console.log('📨 Response status:', response.status);
+
+    // if (!response.ok) {
+    //   const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    //   throw new Error(`Backend error: ${errorData.error || response.statusText}`);
+    // }
+
+    // const data: InferenceResponse = await response.json();
+
+    console.log('🚀 Sending inference request to:', `${API_CONFIG.VISION_API_URL}/infer`);
+
+    console.time('infer_fetch');
     const response = await fetch(`${API_CONFIG.VISION_API_URL}/infer`, {
       method: 'POST',
       body: formData,
-      // Important: No Content-Type header! Let React Native set it with boundary
     });
+    console.timeEnd('infer_fetch');
 
     console.log('📨 Response status:', response.status);
 
@@ -116,7 +134,10 @@ export async function recognizeChessBoard(
       throw new Error(`Backend error: ${errorData.error || response.statusText}`);
     }
 
+    console.time('infer_json');
     const data: InferenceResponse = await response.json();
+    console.timeEnd('infer_json');
+
 
     console.log('✅ Inference response received!');
     console.log('♟️ FEN:', data.fen);
