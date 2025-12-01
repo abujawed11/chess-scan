@@ -188,11 +188,20 @@ export async function getBestMove(fen: string, depth: number = CHESS_CONFIG.ENGI
     if (evaluation.type === 'cp') {
       evalScore = evaluation.value / 100; // Convert centipawns to pawns
     } else if (evaluation.type === 'mate') {
-      evalScore = evaluation.value > 0 ? 100 : -100; // Mate in X moves
+      // For mate, encode as 100 + mate_moves for proper display
+      const mateValue = Math.abs(evaluation.value);
+      evalScore = evaluation.value > 0 ? (100 + mateValue) : -(100 + mateValue);
+    }
+
+    // IMPORTANT: Backend returns evaluation from side-to-move perspective
+    // We need to convert to White's perspective (positive = White better, negative = Black better)
+    if (response.data.side_to_move === 'black') {
+      evalScore = -evalScore; // Negate for Black's turn
+      console.log('🔄 Negating evaluation (Black to move)');
     }
 
     console.log('♟️ Best move:', response.data.bestMove);
-    console.log('📈 Evaluation:', evalScore);
+    console.log('📈 Evaluation (White perspective):', evalScore);
 
     return {
       bestMove: response.data.bestMove,

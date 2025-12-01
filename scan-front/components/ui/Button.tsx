@@ -4,7 +4,7 @@ import { Pressable, Text, StyleSheet, ViewStyle, TextStyle, ActivityIndicator } 
 interface ButtonProps {
   onPress: () => void;
   title: string;
-  variant?: 'primary' | 'secondary' | 'outline';
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'success';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   loading?: boolean;
@@ -40,6 +40,8 @@ export default function Button({
       primary: { backgroundColor: '#000' },
       secondary: { backgroundColor: '#6b7280' },
       outline: { backgroundColor: 'transparent', borderWidth: 2, borderColor: '#000' },
+      danger: { backgroundColor: '#ef4444' }, // Red
+      success: { backgroundColor: '#10b981' }, // Green
     };
 
     return { ...baseStyle, ...sizeStyles[size], ...variantStyles[variant] };
@@ -56,6 +58,8 @@ export default function Button({
       primary: { color: '#fff' },
       secondary: { color: '#fff' },
       outline: { color: '#000' },
+      danger: { color: '#fff' },
+      success: { color: '#fff' },
     };
 
     return {

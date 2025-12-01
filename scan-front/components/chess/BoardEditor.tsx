@@ -676,6 +676,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 100, // Extra padding to prevent overlap with bottom navigation
   },
   header: {
     flexDirection: 'row',

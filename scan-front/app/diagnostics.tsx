@@ -218,6 +218,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 100, // Extra padding to prevent overlap with bottom navigation
   },
   header: {
     marginBottom: 24,

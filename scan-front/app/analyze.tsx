@@ -47,32 +47,21 @@ const EvaluationBar: React.FC<EvaluationBarProps> = ({ evaluation }) => {
   // Clamp to [-MAX_ABS_EVAL, MAX_ABS_EVAL]
   const clamped = Math.max(-MAX_ABS_EVAL, Math.min(MAX_ABS_EVAL, ev));
 
-  // Fractions for each side (0 → 1)
-  const whiteFrac = clamped > 0 ? clamped / MAX_ABS_EVAL : 0;
-  const blackFrac = clamped < 0 ? -clamped / MAX_ABS_EVAL : 0;
+  // Calculate proportions for the bar (always 100% filled)
+  // At eval = 0: 50% black, 50% white
+  // At eval = +5: ~10% black, ~90% white (white winning)
+  // At eval = -5: ~90% black, ~10% white (black winning)
+  const whitePercentage = 50 + (clamped / MAX_ABS_EVAL) * 50; // 0-100%
+  const blackPercentage = 100 - whitePercentage; // 0-100%
 
   return (
     <View style={styles.evalBarContainer}>
       <View style={styles.evalBarTrack}>
-        {/* Black side (left) */}
-        <View style={styles.evalHalf}>
-          <View
-            style={[
-              styles.evalBlackFill,
-              { width: `${blackFrac * 100}%` },
-            ]}
-          />
-        </View>
+        {/* Black side (left) - always visible */}
+        <View style={[styles.evalColorSection, { width: `${blackPercentage}%`, backgroundColor: '#dc2626' }]} />
 
-        {/* White side (right) */}
-        <View style={styles.evalHalf}>
-          <View
-            style={[
-              styles.evalWhiteFill,
-              { width: `${whiteFrac * 100}%` },
-            ]}
-          />
-        </View>
+        {/* White side (right) - always visible */}
+        <View style={[styles.evalColorSection, { width: `${whitePercentage}%`, backgroundColor: '#16a34a' }]} />
       </View>
 
       <View style={styles.evalBarLabelsRow}>
@@ -151,6 +140,7 @@ export default function Analyze() {
     setLoading(true);
     try {
       const result = await getBestMove(game.fen(), analysisDepth);
+
       setBestMove(result.bestMove);
       setEvaluation(result.evaluation);
 
@@ -432,7 +422,19 @@ export default function Analyze() {
 
   const formatEvaluation = (ev: number | null): string => {
     if (ev === null) return 'N/A';
-    if (Math.abs(ev) > 90) return ev > 0 ? 'M+' : 'M-'; // Mate
+
+    // Mate position
+    if (Math.abs(ev) > 90) {
+      // Try to extract mate number if encoded (assuming 100 + mate_moves)
+      if (Math.abs(ev) >= 100) {
+        const mateNum = Math.round(Math.abs(ev) - 100);
+        return ev > 0 ? `+M${mateNum}` : `-M${mateNum}`;
+      }
+      // If exact mate number not available, just show +M or -M
+      return ev > 0 ? '+M' : '-M';
+    }
+
+    // Regular evaluation (material advantage in pawns)
     return (ev > 0 ? '+' : '') + ev.toFixed(2);
   };
 
@@ -698,12 +700,13 @@ export default function Analyze() {
 
         {/* Action Buttons */}
         <View style={styles.actions}>
-          <Button title="Reset" onPress={handleReset} variant="secondary" style={{ flex: 1 }} />
+          <Button title="Reset" onPress={handleReset} variant="danger" style={{ flex: 1 }} />
           {gameMode === 'analyze' && (
             <Button
               title="Analyze"
               onPress={analyzePosition}
               disabled={gameStatus.isGameOver || loading}
+              variant="success"
               style={{ flex: 1 }}
             />
           )}
@@ -725,21 +728,9 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 9999,
     overflow: 'hidden',
-    backgroundColor: '#e5e7eb',
   },
-  evalHalf: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  evalBlackFill: {
+  evalColorSection: {
     height: '100%',
-    backgroundColor: '#dc2626', // red for Black advantage
-    alignSelf: 'flex-end',      // fill from center towards left
-  },
-  evalWhiteFill: {
-    height: '100%',
-    backgroundColor: '#16a34a', // green for White advantage
-    alignSelf: 'flex-start',    // fill from center towards right
   },
   evalBarLabelsRow: {
     flexDirection: 'row',
@@ -835,6 +826,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 100, // Extra padding to prevent overlap with bottom navigation
   },
   header: {
     marginBottom: 16,
