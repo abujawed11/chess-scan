@@ -472,7 +472,7 @@ export default function Analyze() {
 
           <View style={styles.depthSelector}>
             <Text style={styles.depthLabel}>Depth:</Text>
-            {[10, 15, 20].map(d => (
+            {[10, 12, 15, 18, 20].map(d => (
               <Pressable
                 key={d}
                 style={[styles.depthButton, analysisDepth === d && styles.depthActive]}

@@ -13,6 +13,7 @@ import {
 import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { manipulateAsync, FlipType, SaveFormat } from 'expo-image-manipulator';
+import * as Clipboard from 'expo-clipboard';
 import { BoardPosition, ChessPiece, PieceType, PieceColor } from '@/types/chess';
 import { fenToPosition, positionToFen, inferCastlingRights, validateAndFixSide } from '@/utils/fen';
 import { useTheme, getPieceImageUrl } from '@/context/ThemeContext';
@@ -240,7 +241,7 @@ export default function BoardEditor({
   };
 
   const handleCopyFen = async () => {
-    // In React Native, we'd need expo-clipboard
+    await Clipboard.setStringAsync(fen);
     Alert.alert('FEN Copied', fen);
   };
 
